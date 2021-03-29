@@ -11,8 +11,7 @@ rtdb is an embedded database library for key-value data, Supported operations:
 example:
 
 ```c
-char *path = "./test.db";
-struct rtdb *db = rtdb_open(path);
+struct rtdb *db = rtdb_open("./test.db");
 
 struct rtdb_transaction *trans = rtdb_transaction_gegin(db);
 rtdb_put(trans, "apple", 5, "apple_value", 11);
@@ -22,5 +21,16 @@ rtdb_transaction_commit(trans);
 //rtdb_transaction_rollback(trans);
 
 free(trans);
+rtdb_close(db);
+```
+
+```c
+struct rtdb *db = rtdb_open("./test.db");
+
+struct rtdb_leaf *leaf = rtdb_get(db, "app", 3);
+printf("app: %.*s\n", leaf->value_len, leaf->value);
+free(leaf->value);
+free(leaf);
+
 rtdb_close(db);
 ```
