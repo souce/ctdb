@@ -20,7 +20,7 @@ rtdb_put(trans, "application", 11, "application_value", 17);
 rtdb_transaction_commit(trans);
 //rtdb_transaction_rollback(trans);
 
-free(trans);
+rtdb_transaction_free(trans);
 rtdb_close(db);
 ```
 
@@ -29,8 +29,7 @@ struct rtdb *db = rtdb_open("./test.db");
 
 struct rtdb_leaf *leaf = rtdb_get(db, "app", 3);
 printf("app: %.*s\n", leaf->value_len, leaf->value);
-free(leaf->value);
-free(leaf);
+rtdb_leaf_free(leaf);
 
 rtdb_close(db);
 ```
