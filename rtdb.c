@@ -307,7 +307,7 @@ err:
     return NULL;
 }
 
-struct rtdb_transaction *rtdb_transaction_gegin(struct rtdb *db) {
+struct rtdb_transaction *rtdb_transaction_begin(struct rtdb *db) {
     struct rtdb_transaction *trans = calloc(1, sizeof(*trans));
     if (NULL != trans) {
         trans->is_isvalid = 1;
