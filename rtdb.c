@@ -299,12 +299,17 @@ struct rtdb_leaf *rtdb_get(struct rtdb *db, char *key, int key_len) {
     return leaf;
 
 err:
-    if (NULL != leaf) {
-        if (NULL != leaf->value)
+    rtdb_leaf_free(leaf);
+    return NULL;
+}
+
+void rtdb_leaf_free(struct rtdb_leaf *leaf){
+    if(NULL != leaf){
+        if(NULL != leaf->value){
             free(leaf->value);
+        }
         free(leaf);
     }
-    return NULL;
 }
 
 struct rtdb_transaction *rtdb_transaction_begin(struct rtdb *db) {
@@ -468,6 +473,12 @@ err:
 void rtdb_transaction_rollback(struct rtdb_transaction *trans) {
     if (NULL != trans) {
         trans->is_isvalid = 0;  //the transaction that have been used (commit, rollback) cannot be used any more
+    }
+}
+
+void rtdb_transaction_free(struct rtdb_transaction *trans){
+    if (NULL != trans) {
+        free(trans);
     }
 }
 
