@@ -80,7 +80,7 @@ struct rtdb_transaction{
 //API
 struct rtdb *rtdb_open(char *path);
 struct rtdb_leaf *rtdb_get(struct rtdb *db, char *key, int key_len);
-struct rtdb_transaction *rtdb_transaction_gegin(struct rtdb *db);
+struct rtdb_transaction *rtdb_transaction_begin(struct rtdb *db);
 int rtdb_put(struct rtdb_transaction *trans, char *key, int key_len, char *value, int value_len);
 int rtdb_del(struct rtdb_transaction *trans, char *key, int key_len);
 int rtdb_transaction_commit(struct rtdb_transaction *trans);
