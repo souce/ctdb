@@ -89,28 +89,28 @@ void simple_test() {
     struct rtdb *db = rtdb_open(path);
     assert(NULL != db);
 
-    struct rtdb_transaction *trans = rtdb_transaction_gegin(db);
+    struct rtdb_transaction *trans = rtdb_transaction_begin(db);
     assert(NULL != trans);
     assert(RTDB_OK == rtdb_put(trans, "apple", 5, "apple_value", 11));
     assert(RTDB_OK == rtdb_transaction_commit(trans));
     free(trans);
     
-    assert(NULL != (trans = rtdb_transaction_gegin(db)));
+    assert(NULL != (trans = rtdb_transaction_begin(db)));
     assert(RTDB_OK == rtdb_put(trans, "app", 3, "app_value", 9));
     assert(RTDB_OK == rtdb_transaction_commit(trans));
     free(trans);
 
-    assert(NULL != (trans = rtdb_transaction_gegin(db)));
+    assert(NULL != (trans = rtdb_transaction_begin(db)));
     assert(RTDB_OK == rtdb_put(trans, "application", 11, "application_value", 17));
     assert(RTDB_OK == rtdb_transaction_commit(trans));
     free(trans);
 
-    assert(NULL != (trans = rtdb_transaction_gegin(db)));
+    assert(NULL != (trans = rtdb_transaction_begin(db)));
     assert(RTDB_OK == rtdb_put(trans, "xxx", 3, "hahahahaha", 10));
     assert(RTDB_OK == rtdb_transaction_commit(trans));
     free(trans);
 
-    assert(NULL != (trans = rtdb_transaction_gegin(db)));
+    assert(NULL != (trans = rtdb_transaction_begin(db)));
     assert(RTDB_OK == rtdb_put(trans, "app", 3, "app_6666666669", 14));
     assert(RTDB_OK == rtdb_transaction_commit(trans));
     free(trans);
@@ -148,7 +148,7 @@ void simple_test() {
 
     printf("-----------------------\n");
 
-    assert(NULL != (trans = rtdb_transaction_gegin(db)));
+    assert(NULL != (trans = rtdb_transaction_begin(db)));
     assert(RTDB_OK == rtdb_del(trans, "xxx", 3));
     assert(RTDB_OK == rtdb_transaction_commit(trans));
     free(trans);
@@ -170,7 +170,7 @@ void stress_put_testing_single_transaction(int key_len, int count) {
     assert(NULL != db);
     assert(key_len <= RTDB_MAX_KEY_LEN);
 
-    struct rtdb_transaction *trans = rtdb_transaction_gegin(db);
+    struct rtdb_transaction *trans = rtdb_transaction_begin(db);
     assert(NULL != trans);
 
     int64_t start = getCurrentTime();
@@ -204,7 +204,7 @@ void stress_put_testing_multiple_transactions(int count) {
         //char *key = random_str_shortly(key_len);
         //char *key = random_str_num(key_len);
 
-        struct rtdb_transaction *trans = rtdb_transaction_gegin(db);
+        struct rtdb_transaction *trans = rtdb_transaction_begin(db);
         assert(NULL != trans);
         assert(RTDB_OK == rtdb_put(trans, key, key_len, key, key_len));
         assert(NULL != trans);
@@ -235,14 +235,14 @@ void stress_get_testing(int count) {
     char *test_key = "t5gc8oko0a1uyrfb6xbf6bwsf877y44q";
     int test_key_len = 32;
 
-    struct rtdb_transaction *trans = rtdb_transaction_gegin(db);
+    struct rtdb_transaction *trans = rtdb_transaction_begin(db);
     assert(NULL != trans);
     assert(RTDB_OK == rtdb_put(trans, test_key, test_key_len, test_key, test_key_len));
     assert(NULL != trans);
     assert(RTDB_OK == rtdb_transaction_commit(trans));
     free(trans);
     
-    assert(NULL != (trans = rtdb_transaction_gegin(db)));
+    assert(NULL != (trans = rtdb_transaction_begin(db)));
     int i = 1;
     for(; i < count; i++){
         char *key = random_str(key_len);
@@ -274,25 +274,25 @@ void transction_test() {
     struct rtdb *db = rtdb_open(path);
     assert(NULL != db);
 
-    struct rtdb_transaction *trans = rtdb_transaction_gegin(db);
+    struct rtdb_transaction *trans = rtdb_transaction_begin(db);
     assert(NULL != trans);
     assert(RTDB_OK == rtdb_put(trans, "apple", 5, "apple_value", 11));
     assert(RTDB_OK == rtdb_transaction_commit(trans));
     free(trans);
     
-    assert(NULL != (trans = rtdb_transaction_gegin(db)));
+    assert(NULL != (trans = rtdb_transaction_begin(db)));
     assert(RTDB_OK == rtdb_put(trans, "app", 3, "app_value", 9));
     assert(NULL != trans);
     assert(RTDB_OK == rtdb_transaction_commit(trans));
     free(trans);
 
-    assert(NULL != (trans = rtdb_transaction_gegin(db)));
+    assert(NULL != (trans = rtdb_transaction_begin(db)));
     assert(RTDB_OK == rtdb_put(trans, "application", 11, "application_value", 17));
     assert(NULL != trans);
     assert(RTDB_OK == rtdb_transaction_commit(trans));
     free(trans);
 
-    assert(NULL != (trans = rtdb_transaction_gegin(db)));
+    assert(NULL != (trans = rtdb_transaction_begin(db)));
     assert(RTDB_OK == rtdb_put(trans, "app", 3, "app_new_value", 13));
     assert(NULL != trans);
     rtdb_transaction_rollback(trans);
@@ -322,7 +322,7 @@ void transction_test2() {
     struct rtdb *db = rtdb_open(path);
     assert(NULL != db);
 
-    struct rtdb_transaction *trans = rtdb_transaction_gegin(db);
+    struct rtdb_transaction *trans = rtdb_transaction_begin(db);
     assert(NULL != trans);
     assert(RTDB_OK == rtdb_put(trans, "app", 3, "app_value", 13));
     rtdb_transaction_rollback(trans);
@@ -342,7 +342,7 @@ void transction_test2() {
     printf("-----------------------\n");
 
     db = rtdb_open(path);
-    assert(NULL != (trans = rtdb_transaction_gegin(db)));
+    assert(NULL != (trans = rtdb_transaction_begin(db)));
     assert(RTDB_OK == rtdb_put(trans, "app", 3, "app_value", 13));
     assert(RTDB_OK == rtdb_transaction_commit(trans));
     free(trans);
@@ -378,7 +378,7 @@ void test_iter(int count) {
     for(; i < count; i++){
         char *key = random_str_shortly(key_len);
 
-        struct rtdb_transaction *trans = rtdb_transaction_gegin(db);
+        struct rtdb_transaction *trans = rtdb_transaction_begin(db);
         assert(NULL != trans);
         assert(RTDB_OK == rtdb_put(trans, key, key_len, key, key_len));
         assert(NULL != trans);
