@@ -1,6 +1,8 @@
 # rtdb
 
-rtdb is an embedded database library for key-value data, Supported operations:
+rtdb is a simple key/value database, based on prefix-compressed trie.
+
+Supported operations:
 
  * Add a new key/value pair to the database.
  * Delete an existing key from the database.
