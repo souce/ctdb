@@ -13,7 +13,7 @@ example:
 ```c
 struct rtdb *db = rtdb_open("./test.db");
 
-struct rtdb_transaction *trans = rtdb_transaction_gegin(db);
+struct rtdb_transaction *trans = rtdb_transaction_begin(db);
 rtdb_put(trans, "apple", 5, "apple_value", 11);
 rtdb_put(trans, "app", 3, "app_value", 9);
 rtdb_put(trans, "application", 11, "application_value", 17);
