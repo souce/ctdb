@@ -93,27 +93,27 @@ void simple_test() {
     assert(NULL != trans);
     assert(RTDB_OK == rtdb_put(trans, "apple", 5, "apple_value", 11));
     assert(RTDB_OK == rtdb_transaction_commit(trans));
-    free(trans);
+    rtdb_transaction_free(trans);
     
     assert(NULL != (trans = rtdb_transaction_begin(db)));
     assert(RTDB_OK == rtdb_put(trans, "app", 3, "app_value", 9));
     assert(RTDB_OK == rtdb_transaction_commit(trans));
-    free(trans);
+    rtdb_transaction_free(trans);
 
     assert(NULL != (trans = rtdb_transaction_begin(db)));
     assert(RTDB_OK == rtdb_put(trans, "application", 11, "application_value", 17));
     assert(RTDB_OK == rtdb_transaction_commit(trans));
-    free(trans);
+    rtdb_transaction_free(trans);
 
     assert(NULL != (trans = rtdb_transaction_begin(db)));
     assert(RTDB_OK == rtdb_put(trans, "xxx", 3, "hahahahaha", 10));
     assert(RTDB_OK == rtdb_transaction_commit(trans));
-    free(trans);
+    rtdb_transaction_free(trans);
 
     assert(NULL != (trans = rtdb_transaction_begin(db)));
     assert(RTDB_OK == rtdb_put(trans, "app", 3, "app_6666666669", 14));
     assert(RTDB_OK == rtdb_transaction_commit(trans));
-    free(trans);
+    rtdb_transaction_free(trans);
     rtdb_close(db);
 
     printf("-----------------------\n");
@@ -125,33 +125,29 @@ void simple_test() {
     struct rtdb_leaf *leaf = rtdb_get(db, "app", 3);
     assert(NULL != leaf);
     printf("app: %.*s\n", leaf->value_len, leaf->value);
-    free(leaf->value);
-    free(leaf);
+    rtdb_leaf_free(leaf);
 
     leaf = rtdb_get(db, "apple", 5);
     assert(NULL != leaf);
     printf("apple: %.*s\n", leaf->value_len, leaf->value);
-    free(leaf->value);
-    free(leaf);
-
+    rtdb_leaf_free(leaf);
+    
     leaf = rtdb_get(db, "application", 11);
     assert(NULL != leaf);
     printf("application: %.*s\n", leaf->value_len, leaf->value);
-    free(leaf->value);
-    free(leaf);
+    rtdb_leaf_free(leaf);
 
     leaf = rtdb_get(db, "xxx", 3);
     assert(NULL != leaf);
     printf("xxx: %.*s\n", leaf->value_len, leaf->value);
-    free(leaf->value);
-    free(leaf);
+    rtdb_leaf_free(leaf);
 
     printf("-----------------------\n");
 
     assert(NULL != (trans = rtdb_transaction_begin(db)));
     assert(RTDB_OK == rtdb_del(trans, "xxx", 3));
     assert(RTDB_OK == rtdb_transaction_commit(trans));
-    free(trans);
+    rtdb_transaction_free(trans);
     
     leaf = rtdb_get(db, "xxx", 3);
     assert(NULL == leaf);
@@ -184,7 +180,7 @@ void stress_put_testing_single_transaction(int key_len, int count) {
     }
     rtdb_transaction_commit(trans);
     printf("stress_put_testing_single_transaction: count:%d, time consuming:%lldms  del_count:%lld tran_count:%lld\n", count, getCurrentTime() - start, db->footer.del_count, db->footer.tran_count);
-    free(trans);
+    rtdb_transaction_free(trans);
     rtdb_close(db);
 }
 
@@ -209,14 +205,13 @@ void stress_put_testing_multiple_transactions(int count) {
         assert(RTDB_OK == rtdb_put(trans, key, key_len, key, key_len));
         assert(NULL != trans);
         assert(RTDB_OK == rtdb_transaction_commit(trans));
-        free(trans);
+        rtdb_transaction_free(trans);
 
         //struct rtdb_leaf *leaf = rtdb_get(db, key, key_len);
         //assert(NULL != leaf);
         //assert(key_len == leaf->value_len && 0 == strncmp(key, leaf->value, key_len));
         //printf("%s %.*s\n", key, leaf->value_len, leaf->value);
-        //free(leaf->value);
-        //free(leaf);
+        //rtdb_leaf_free(leaf);
         free(key);
     }
     printf("stress_put_testing_multiple_transactions: count:%d, time consuming:%lldms  del_count:%lld tran_count:%lld\n", count, getCurrentTime() - start, db->footer.del_count, db->footer.tran_count);
@@ -240,7 +235,7 @@ void stress_get_testing(int count) {
     assert(RTDB_OK == rtdb_put(trans, test_key, test_key_len, test_key, test_key_len));
     assert(NULL != trans);
     assert(RTDB_OK == rtdb_transaction_commit(trans));
-    free(trans);
+    rtdb_transaction_free(trans);
     
     assert(NULL != (trans = rtdb_transaction_begin(db)));
     int i = 1;
@@ -250,7 +245,7 @@ void stress_get_testing(int count) {
         free(key);
     }
     assert(RTDB_OK == rtdb_transaction_commit(trans));
-    free(trans);
+    rtdb_transaction_free(trans);
 
     int64_t start = getCurrentTime();
     i = 0;
@@ -258,8 +253,7 @@ void stress_get_testing(int count) {
         struct rtdb_leaf *leaf = rtdb_get(db, test_key, test_key_len);
         assert(NULL != leaf);
         assert(test_key_len == leaf->value_len && 0 == strncmp(test_key, leaf->value, test_key_len));
-        free(leaf->value);
-        free(leaf);
+        rtdb_leaf_free(leaf);
     }
     printf("stress_get_testing: count:%d, time consuming:%lldms  del_count:%lld tran_count:%lld\n", count, getCurrentTime() - start, db->footer.del_count, db->footer.tran_count);
     rtdb_close(db);
@@ -278,25 +272,25 @@ void transction_test() {
     assert(NULL != trans);
     assert(RTDB_OK == rtdb_put(trans, "apple", 5, "apple_value", 11));
     assert(RTDB_OK == rtdb_transaction_commit(trans));
-    free(trans);
+    rtdb_transaction_free(trans);
     
     assert(NULL != (trans = rtdb_transaction_begin(db)));
     assert(RTDB_OK == rtdb_put(trans, "app", 3, "app_value", 9));
     assert(NULL != trans);
     assert(RTDB_OK == rtdb_transaction_commit(trans));
-    free(trans);
+    rtdb_transaction_free(trans);
 
     assert(NULL != (trans = rtdb_transaction_begin(db)));
     assert(RTDB_OK == rtdb_put(trans, "application", 11, "application_value", 17));
     assert(NULL != trans);
     assert(RTDB_OK == rtdb_transaction_commit(trans));
-    free(trans);
+    rtdb_transaction_free(trans);
 
     assert(NULL != (trans = rtdb_transaction_begin(db)));
     assert(RTDB_OK == rtdb_put(trans, "app", 3, "app_new_value", 13));
     assert(NULL != trans);
     rtdb_transaction_rollback(trans);
-    free(trans);
+    rtdb_transaction_free(trans);
     rtdb_close(db);
 
     printf("-----------------------\n");
@@ -308,8 +302,7 @@ void transction_test() {
     struct rtdb_leaf *leaf = rtdb_get(db, "app", 3);
     assert(NULL != leaf);
     printf("app valua is: '%.*s'\n", leaf->value_len, leaf->value);
-    free(leaf->value);
-    free(leaf);
+    rtdb_leaf_free(leaf);
     rtdb_close(db);
 }
 
@@ -326,7 +319,7 @@ void transction_test2() {
     assert(NULL != trans);
     assert(RTDB_OK == rtdb_put(trans, "app", 3, "app_value", 13));
     rtdb_transaction_rollback(trans);
-    free(trans);
+    rtdb_transaction_free(trans);
     rtdb_close(db);
 
     printf("-----------------------\n");
@@ -345,13 +338,12 @@ void transction_test2() {
     assert(NULL != (trans = rtdb_transaction_begin(db)));
     assert(RTDB_OK == rtdb_put(trans, "app", 3, "app_value", 13));
     assert(RTDB_OK == rtdb_transaction_commit(trans));
-    free(trans);
+    rtdb_transaction_free(trans);
     
     leaf = rtdb_get(db, "app", 3);
     assert(NULL != leaf);
     printf("app valua is: '%.*s'\n", leaf->value_len, leaf->value);
-    free(leaf->value);
-    free(leaf);
+    rtdb_leaf_free(leaf);
     rtdb_close(db);
 }
 
@@ -383,14 +375,13 @@ void test_iter(int count) {
         assert(RTDB_OK == rtdb_put(trans, key, key_len, key, key_len));
         assert(NULL != trans);
         assert(RTDB_OK == rtdb_transaction_commit(trans));
-        free(trans);
+        rtdb_transaction_free(trans);
 
         struct rtdb_leaf *leaf = rtdb_get(db, key, key_len);
         assert(NULL != leaf);
         assert(key_len == leaf->value_len && 0 == strncmp(key, leaf->value, key_len));
         //printf("%s %.*s\n", key, leaf->value_len, leaf->value);
-        free(leaf->value);
-        free(leaf);
+        rtdb_leaf_free(leaf);
         free(key);
     }
 
