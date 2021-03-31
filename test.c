@@ -81,7 +81,7 @@ static char *random_str_num(int len) {
 }
 
 /*
-    Basic test
+    Basic testing
 */
 void simple_test() __attribute__((unused));
 void simple_test() {
