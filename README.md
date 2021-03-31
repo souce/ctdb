@@ -9,6 +9,7 @@ Supported operations:
  * Querying the database for a specific key.
  * Traverse all the data in the database.
  * Support for transactions.
+ * Storage is append-only, written datas are never changed.
 
 example:
 
