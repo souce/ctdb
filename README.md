@@ -2,6 +2,8 @@
 
 rtdb is a simple key/value database, based on prefix-compressed trie.
 
+Storage is append-only, written datas are never changed.
+
 Supported operations:
 
  * Add a new key/value pair to the database.
@@ -9,7 +11,6 @@ Supported operations:
  * Querying the database for a specific key.
  * Traverse all the data in the database.
  * Support for transactions.
- * Storage is append-only, written datas are never changed.
 
 example:
 
