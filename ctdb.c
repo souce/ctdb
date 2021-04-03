@@ -27,7 +27,7 @@
 #include <unistd.h>
 
 #include "serializer.h"
-#include "rtdb.h"
+#include "ctdb.h"
 
 ///////////////////////////////////////////////////////////////////////////////
 // SERIALIZER
@@ -60,13 +60,13 @@ static inline int dump_header(int fd) {
 
 #define FOOTER_ALIGNED(num) ({ ((num) + RTDB_FOOTER_ALIGNED_BASE - 1) & ~(RTDB_FOOTER_ALIGNED_BASE - 1); });
 
-static inline int load_footer(int fd, struct rtdb_footer *footer) {
+static inline int load_footer(int fd, struct ctdb_footer *footer) {
     off_t file_size = lseek(fd, -RTDB_FOOTER_ALIGNED_BASE, SEEK_END);
     off_t flag_aligned_pos = FOOTER_ALIGNED(file_size);  //find the right place for the 'transaction flag'
     while (flag_aligned_pos > RTDB_HEADER_SIZE + RTDB_FOOTER_ALIGNED_BASE) {
         int16_t cksum_1 = 1, cksum_2 = 2;
         char *buf = (char[RTDB_FOOTER_SIZE + 1]){[0 ... RTDB_FOOTER_SIZE] = 0}, *end = &(buf[RTDB_FOOTER_SIZE]);
-        struct rtdb_footer footer_in_file = {.tran_count = 0, .del_count = 0, .root_pos = 0};
+        struct ctdb_footer footer_in_file = {.tran_count = 0, .del_count = 0, .root_pos = 0};
         if (-1 == lseek(fd, flag_aligned_pos, SEEK_SET)) goto retry;
         if (RTDB_FOOTER_SIZE != read(fd, buf, RTDB_FOOTER_SIZE)) goto retry;
         if (SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, cksum_1, int16_t) ||
@@ -84,12 +84,12 @@ static inline int load_footer(int fd, struct rtdb_footer *footer) {
         flag_aligned_pos -= RTDB_FOOTER_ALIGNED_BASE;  //when searching for the 'transaction flag', it spans an alignment length at a time
         continue;
     }
-    *footer = (struct rtdb_footer){.tran_count = 0, .del_count = 0, .root_pos = 0};
+    *footer = (struct ctdb_footer){.tran_count = 0, .del_count = 0, .root_pos = 0};
     return RTDB_ERR;
 }
 
 #define RANDOM_CKSUM() ({ int16_t min = 1, max = INT16_MAX; rand() % (max - min + 1) + min; })
-static inline int dump_footer(int fd, struct rtdb_footer *footer) {
+static inline int dump_footer(int fd, struct ctdb_footer *footer) {
     char footer_buf[RTDB_FOOTER_SIZE + 1] = {[0 ... RTDB_FOOTER_SIZE] = 0}, *buf = footer_buf, *end = &(footer_buf[RTDB_FOOTER_SIZE]);
     int16_t cksum = RANDOM_CKSUM();
     if (SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, cksum, int16_t) ||
@@ -106,7 +106,7 @@ static inline int dump_footer(int fd, struct rtdb_footer *footer) {
     return RTDB_OK;
 }
 
-static inline int load_items(int fd, int items_count, struct rtdb_node_item *items) {
+static inline int load_items(int fd, int items_count, struct ctdb_node_item *items) {
     int item_size = items_count * RTDB_ITEMS_SIZE;
     char item_buf[item_size], *buf = item_buf, *end = &(item_buf[item_size - 1]);
     if (item_size != read(fd, item_buf, item_size)) return RTDB_ERR;
@@ -119,7 +119,7 @@ static inline int load_items(int fd, int items_count, struct rtdb_node_item *ite
     }
     return RTDB_OK;
 }
-static int load_node(int fd, off_t node_pos, struct rtdb_node *node) {
+static int load_node(int fd, off_t node_pos, struct ctdb_node *node) {
     char *buf = (char[RTDB_NODE_SIZE + 1]){[0 ... RTDB_NODE_SIZE] = 0}, *end = &(buf[RTDB_NODE_SIZE]);
     if (-1 == lseek(fd, node_pos, SEEK_SET)) return RTDB_ERR;
     if (RTDB_NODE_SIZE != read(fd, buf, RTDB_NODE_SIZE)) return RTDB_ERR;
@@ -133,7 +133,7 @@ static int load_node(int fd, off_t node_pos, struct rtdb_node *node) {
     return RTDB_OK;
 }
 
-static inline int dump_items(int fd, int items_count, struct rtdb_node_item *items) {
+static inline int dump_items(int fd, int items_count, struct ctdb_node_item *items) {
     int item_size = items_count * RTDB_ITEMS_SIZE;
     char item_buf[item_size], *buf = item_buf, *end = &(item_buf[item_size - 1]);
     int i = 0;
@@ -146,7 +146,7 @@ static inline int dump_items(int fd, int items_count, struct rtdb_node_item *ite
     if (item_size != write(fd, item_buf, item_size)) return RTDB_ERR;
     return RTDB_OK;
 }
-static off_t dump_node(int fd, struct rtdb_node *node) {
+static off_t dump_node(int fd, struct ctdb_node *node) {
     char node_buf[RTDB_NODE_SIZE + 1] = {[0 ... RTDB_NODE_SIZE] = 0}, *buf = node_buf, *end = &(node_buf[RTDB_NODE_SIZE]);
     if (SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, node->prefix_len, uint8_t) ||
         SERIALIZER_OK != SERIALIZER_BUF_WRITE_STR(buf, end, node->prefix, RTDB_MAX_KEY_LEN) ||
@@ -164,7 +164,7 @@ err:
     return -1;
 }
 
-static int load_leaf(int fd, off_t leaf_pos, struct rtdb_leaf *leaf) {
+static int load_leaf(int fd, off_t leaf_pos, struct ctdb_leaf *leaf) {
     if (-1 == lseek(fd, leaf_pos, SEEK_SET)) goto err;
     if (SERIALIZER_OK != SERIALIZER_IO_READ_NUM(fd, leaf->value_len, uint32_t) ||
         SERIALIZER_OK != SERIALIZER_IO_READ_NEW_STR(fd, leaf->value, leaf->value_len)) {
@@ -180,7 +180,7 @@ err:
     return RTDB_ERR;
 }
 
-static off_t dump_leaf(int fd, struct rtdb_leaf *leaf) {
+static off_t dump_leaf(int fd, struct ctdb_leaf *leaf) {
     off_t leaf_pos = lseek(fd, 0, SEEK_END);  //reach to the end
     if (-1 == leaf_pos) goto err;
     if (SERIALIZER_OK != SERIALIZER_IO_WRITE_NUM(fd, leaf->value_len, uint32_t) ||
@@ -206,15 +206,15 @@ static inline int prefix_copy(char *filled_prefix_dst, uint8_t *prefix_dst_len, 
 }
 
 static int item_cmp(const void *a, const void *b) {
-    const struct rtdb_node_item *i = a, *j = b;
+    const struct ctdb_node_item *i = a, *j = b;
     return i->sub_prefix_char - j->sub_prefix_char;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // API
 ///////////////////////////////////////////////////////////////////////////////
-struct rtdb *rtdb_open(char *path) {
-    struct rtdb *db = NULL;
+struct ctdb *ctdb_open(char *path) {
+    struct ctdb *db = NULL;
     int fd = -1;
 
     db = calloc(1, sizeof(*db));
@@ -241,22 +241,22 @@ err:
     return NULL;
 }
 
-void rtdb_close(struct rtdb *db) {
+void ctdb_close(struct ctdb *db) {
     if (NULL == db) return;
     if (0 <= db->fd)
         close(db->fd);
     free(db);
 }
 
-static off_t find_node_from_file(int fd, struct rtdb_node *trav, char *prefix, int prefix_len, int prefix_pos) {
+static off_t find_node_from_file(int fd, struct ctdb_node *trav, char *prefix, int prefix_len, int prefix_pos) {
     while (prefix_len > prefix_pos) {
         char prefix_char = prefix[prefix_pos];
-        struct rtdb_node_item key_item = {.sub_prefix_char = prefix_char, .sub_node_pos = 0};
-        struct rtdb_node_item *item = (struct rtdb_node_item *)bsearch(&key_item, trav->items, trav->items_count, sizeof(key_item), item_cmp);
+        struct ctdb_node_item key_item = {.sub_prefix_char = prefix_char, .sub_node_pos = 0};
+        struct ctdb_node_item *item = (struct ctdb_node_item *)bsearch(&key_item, trav->items, trav->items_count, sizeof(key_item), item_cmp);
         if (NULL == item) goto err;  //the item not found in child nodes, stop searching
 
         //load node from the file
-        struct rtdb_node sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
+        struct ctdb_node sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
         if (RTDB_OK != load_node(fd, item->sub_node_pos, &sub_node)) goto err;
 
         //across the same prefix
@@ -279,12 +279,12 @@ err:
     return 0;
 }
 
-struct rtdb_leaf *rtdb_get(struct rtdb *db, char *key, int key_len) {
-    struct rtdb_leaf *leaf = NULL;
+struct ctdb_leaf *ctdb_get(struct ctdb *db, char *key, int key_len) {
+    struct ctdb_leaf *leaf = NULL;
     if (0 >= key_len || RTDB_MAX_KEY_LEN < key_len || NULL == key) goto err;
     if (0 >= db->footer.root_pos) goto err;
 
-    struct rtdb_node root = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
+    struct ctdb_node root = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
     if (RTDB_OK != load_node(db->fd, db->footer.root_pos, &root)) goto err;
 
     //search the prefix nodes related to key from the file
@@ -299,11 +299,11 @@ struct rtdb_leaf *rtdb_get(struct rtdb *db, char *key, int key_len) {
     return leaf;
 
 err:
-    rtdb_leaf_free(leaf);
+    ctdb_leaf_free(leaf);
     return NULL;
 }
 
-void rtdb_leaf_free(struct rtdb_leaf *leaf){
+void ctdb_leaf_free(struct ctdb_leaf *leaf){
     if(NULL != leaf){
         if(NULL != leaf->value){
             free(leaf->value);
@@ -312,8 +312,8 @@ void rtdb_leaf_free(struct rtdb_leaf *leaf){
     }
 }
 
-struct rtdb_transaction *rtdb_transaction_begin(struct rtdb *db) {
-    struct rtdb_transaction *trans = calloc(1, sizeof(*trans));
+struct ctdb_transaction *ctdb_transaction_begin(struct ctdb *db) {
+    struct ctdb_transaction *trans = calloc(1, sizeof(*trans));
     if (NULL != trans) {
         trans->is_isvalid = 1;
         trans->db = db;
@@ -322,26 +322,26 @@ struct rtdb_transaction *rtdb_transaction_begin(struct rtdb *db) {
     return trans;
 }
 
-static void put_node_in_items(struct rtdb_node *father_node, char sub_prefix_char, int sub_node_pos) {
-    struct rtdb_node_item new_item = {.sub_prefix_char = sub_prefix_char, .sub_node_pos = sub_node_pos};
-    struct rtdb_node_item *exists_item = (struct rtdb_node_item *)bsearch(&new_item, father_node->items, father_node->items_count, sizeof(new_item), item_cmp);
+static void put_node_in_items(struct ctdb_node *father_node, char sub_prefix_char, int sub_node_pos) {
+    struct ctdb_node_item new_item = {.sub_prefix_char = sub_prefix_char, .sub_node_pos = sub_node_pos};
+    struct ctdb_node_item *exists_item = (struct ctdb_node_item *)bsearch(&new_item, father_node->items, father_node->items_count, sizeof(new_item), item_cmp);
     if (exists_item != NULL) {
         exists_item->sub_node_pos = sub_node_pos;
     } else {
         father_node->items[father_node->items_count++] = new_item; //as long as the 'RTDB_MAX_CHAR_RANGE' is 256, it will not out of the bounds
-        qsort(father_node->items, father_node->items_count, sizeof(struct rtdb_node_item), item_cmp);
+        qsort(father_node->items, father_node->items_count, sizeof(struct ctdb_node_item), item_cmp);
     }
 }
 
-static off_t save_node_into_file(int fd, struct rtdb_node *trav, char *prefix, int prefix_len, int prefix_pos, off_t leaf_pos) {
+static off_t save_node_into_file(int fd, struct ctdb_node *trav, char *prefix, int prefix_len, int prefix_pos, off_t leaf_pos) {
     while (prefix_len > prefix_pos) {
         char prefix_char = prefix[prefix_pos];
-        struct rtdb_node_item key_item = {.sub_prefix_char = prefix_char, .sub_node_pos = 0};
-        struct rtdb_node_item *item = (struct rtdb_node_item *)bsearch(&key_item, trav->items, trav->items_count, sizeof(key_item), item_cmp);
+        struct ctdb_node_item key_item = {.sub_prefix_char = prefix_char, .sub_node_pos = 0};
+        struct ctdb_node_item *item = (struct ctdb_node_item *)bsearch(&key_item, trav->items, trav->items_count, sizeof(key_item), item_cmp);
         if (NULL == item) break;  //the item not found in child nodes, stop searching
 
         //load node from the file
-        struct rtdb_node sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
+        struct ctdb_node sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
         if (RTDB_OK != load_node(fd, item->sub_node_pos, &sub_node)) goto err;
 
         //across the same prefix
@@ -371,7 +371,7 @@ static off_t save_node_into_file(int fd, struct rtdb_node *trav, char *prefix, i
                 if (0 >= sub_node_pos) goto err;
 
                 //old node as a child of new node
-                struct rtdb_node new_node = {.prefix_len = 0, .leaf_pos = leaf_pos, .items_count = 0};
+                struct ctdb_node new_node = {.prefix_len = 0, .leaf_pos = leaf_pos, .items_count = 0};
                 if (RTDB_OK != prefix_copy(new_node.prefix, &new_node.prefix_len, prefix + prefix_pos, RTDB_MAX_KEY_LEN)) goto err;
                 put_node_in_items(&new_node, sub_node.prefix[0], sub_node_pos);
                 off_t new_node_pos = dump_node(fd, &new_node);  //append the node to the end of file
@@ -380,8 +380,8 @@ static off_t save_node_into_file(int fd, struct rtdb_node *trav, char *prefix, i
                 put_node_in_items(trav, new_node.prefix[0], new_node_pos);
                 return dump_node(fd, trav);  //append the node to the end of file
             } else {
-                //the new prefix and the old prefix are not duplicate, need to split a common node to accommodate both
-                struct rtdb_node temp_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
+                //the new prefix and the old prefix are not duplicate, split a common node to accommodate both
+                struct ctdb_node temp_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
                 if (RTDB_OK != prefix_copy(temp_node.prefix, &temp_node.prefix_len, sub_node.prefix, sub_node_prefix_pos)) goto err;
 
                 if (RTDB_OK != prefix_copy(sub_node.prefix, &sub_node.prefix_len, old_remained, RTDB_MAX_KEY_LEN)) goto err;
@@ -389,7 +389,7 @@ static off_t save_node_into_file(int fd, struct rtdb_node *trav, char *prefix, i
                 if (0 >= sub_node_pos) goto err;
                 put_node_in_items(&temp_node, sub_node.prefix[0], sub_node_pos);
 
-                struct rtdb_node new_node = {.prefix_len = 0, .leaf_pos = leaf_pos, .items_count = 0};
+                struct ctdb_node new_node = {.prefix_len = 0, .leaf_pos = leaf_pos, .items_count = 0};
                 if (RTDB_OK != prefix_copy(new_node.prefix, &new_node.prefix_len, new_remained, RTDB_MAX_KEY_LEN)) goto err;
                 off_t new_node_pos = dump_node(fd, &new_node);  //append the node to the end of file
                 if (0 >= new_node_pos) goto err;
@@ -403,7 +403,7 @@ static off_t save_node_into_file(int fd, struct rtdb_node *trav, char *prefix, i
     }  //end:while
     if (prefix_pos < prefix_len) {
         //initialize the new node, or the new prefix is longer than the old prefix
-        struct rtdb_node new_node = {.prefix_len = 0, .leaf_pos = leaf_pos, .items_count = 0};
+        struct ctdb_node new_node = {.prefix_len = 0, .leaf_pos = leaf_pos, .items_count = 0};
         if (RTDB_OK != prefix_copy(new_node.prefix, &new_node.prefix_len, prefix + prefix_pos, RTDB_MAX_KEY_LEN)) goto err;
         off_t new_node_pos = dump_node(fd, &new_node);  //append the node to the end of file
         if (0 >= new_node_pos) goto err;
@@ -419,18 +419,18 @@ err:
     return 0;
 }
 
-int rtdb_put(struct rtdb_transaction *trans, char *key, int key_len, char *value, int value_len) {
+int ctdb_put(struct ctdb_transaction *trans, char *key, int key_len, char *value, int value_len) {
     if (NULL == trans || 1 != trans->is_isvalid) goto err;  //verify that the transaction has not been committed or rolled back
     if (0 >= key_len || RTDB_MAX_KEY_LEN < key_len || NULL == key) goto err;
     if (0 > value_len || RTDB_MAX_VALUE_LEN < value_len || NULL == value) goto err;  //delete value (whether it exists or not)
 
-    struct rtdb_node root = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
+    struct ctdb_node root = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
     if (0 < trans->new_footer.root_pos) {
         if (RTDB_OK != load_node(trans->db->fd, trans->new_footer.root_pos, &root)) goto err;
     }
 
     //append the leaf node (value) to the file
-    struct rtdb_leaf new_leaf = (struct rtdb_leaf){.value_len = value_len, .value = value};
+    struct ctdb_leaf new_leaf = (struct ctdb_leaf){.value_len = value_len, .value = value};
     off_t new_leaf_pos = dump_leaf(trans->db->fd, &new_leaf);
     if (0 >= new_leaf_pos) goto err;
 
@@ -451,15 +451,15 @@ err:
     return RTDB_ERR;
 }
 
-int rtdb_del(struct rtdb_transaction *trans, char *key, int key_len) {
-    return rtdb_put(trans, key, key_len, "", 0);
+int ctdb_del(struct ctdb_transaction *trans, char *key, int key_len) {
+    return ctdb_put(trans, key, key_len, "", 0);
 }
 
-int rtdb_transaction_commit(struct rtdb_transaction *trans) {
+int ctdb_transaction_commit(struct ctdb_transaction *trans) {
     if (NULL == trans || 1 != trans->is_isvalid) goto err;  //verify that the transaction has not been committed or rolled back
     trans->is_isvalid = 0;  //the transaction that have been used (commit, rollback) cannot be used any more
 
-    struct rtdb *db = trans->db;
+    struct ctdb *db = trans->db;
     //save the 'transaction flag', which means that the transaction was committed successfully
     if (RTDB_OK != dump_footer(db->fd, &(trans->new_footer))) goto err;
     if (-1 == fsync(db->fd)) goto err;
@@ -470,13 +470,13 @@ err:
     return RTDB_ERR;
 }
 
-void rtdb_transaction_rollback(struct rtdb_transaction *trans) {
+void ctdb_transaction_rollback(struct ctdb_transaction *trans) {
     if (NULL != trans) {
         trans->is_isvalid = 0;  //the transaction that have been used (commit, rollback) cannot be used any more
     }
 }
 
-void rtdb_transaction_free(struct rtdb_transaction *trans){
+void ctdb_transaction_free(struct ctdb_transaction *trans){
     if (NULL != trans) {
         free(trans);
     }
@@ -485,14 +485,14 @@ void rtdb_transaction_free(struct rtdb_transaction *trans){
 ///////////////////////////////////////////////////////////////////////////////
 // iterator
 ///////////////////////////////////////////////////////////////////////////////
-static int iterator_travel(int fd, struct rtdb_node *trav, char *key, int key_len, rtdb_traversal *traversal) {
+static int iterator_travel(int fd, struct ctdb_node *trav, char *key, int key_len, ctdb_traversal *traversal) {
     if ((trav->prefix_len + key_len) < RTDB_MAX_KEY_LEN) {
         char prefix_key[RTDB_MAX_KEY_LEN + 1] = {[0 ... RTDB_MAX_KEY_LEN] = 0};
         if (0 > sprintf(prefix_key, "%.*s%.*s", key_len, key, trav->prefix_len, trav->prefix)) goto over;
         int prefix_key_len = key_len + trav->prefix_len;
 
         if (0 < trav->leaf_pos) {
-            struct rtdb_leaf leaf = {.value_len = 0, .value = NULL};
+            struct ctdb_leaf leaf = {.value_len = 0, .value = NULL};
             if (RTDB_OK != load_leaf(fd, trav->leaf_pos, &leaf)) goto over;
             if (0 < prefix_key_len && 0 < leaf.value_len) {                              //the data has not been deleted
                 if (RTDB_OK != traversal(prefix_key, prefix_key_len, &leaf)) goto over;  //the traversal operation has been cancelled
@@ -503,7 +503,7 @@ static int iterator_travel(int fd, struct rtdb_node *trav, char *key, int key_le
         int items_index = 0;
         for (; items_index < trav->items_count; items_index++) {
             off_t sub_node_pos = trav->items[items_index].sub_node_pos;
-            struct rtdb_node sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
+            struct ctdb_node sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
             if (RTDB_OK != load_node(fd, sub_node_pos, &sub_node)) goto over;
             if (RTDB_OK != iterator_travel(fd, &sub_node, prefix_key, prefix_key_len, traversal)) goto over;  //something wrong, or the traversal operation has been cancelled
         }
@@ -514,8 +514,8 @@ over:
     return RTDB_ERR;
 }
 
-int rtdb_iterator_travel(struct rtdb *db, rtdb_traversal *traversal) {
-    struct rtdb_node root = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
+int ctdb_iterator_travel(struct ctdb *db, ctdb_traversal *traversal) {
+    struct ctdb_node root = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
     if (RTDB_OK == load_node(db->fd, db->footer.root_pos, &root)) {
         return iterator_travel(db->fd, &root, "", 0, traversal);
     }

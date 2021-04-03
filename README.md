@@ -1,6 +1,6 @@
-# rtdb
+# ctdb
 
-rtdb is a simple key/value database, based on prefix-compressed trie.
+ctdb is a simple key/value database, based on prefix-compressed trie.
 
 Storage is append-only, written datas are never changed.
 
@@ -15,25 +15,25 @@ Supported operations:
 example:
 
 ```c
-struct rtdb *db = rtdb_open("./test.db");
+struct ctdb *db = ctdb_open("./test.db");
 
-struct rtdb_transaction *trans = rtdb_transaction_begin(db);
-rtdb_put(trans, "apple", 5, "apple_value", 11);
-rtdb_put(trans, "app", 3, "app_value", 9);
-rtdb_put(trans, "application", 11, "application_value", 17);
-rtdb_transaction_commit(trans);
-//rtdb_transaction_rollback(trans);
+struct ctdb_transaction *trans = ctdb_transaction_begin(db);
+ctdb_put(trans, "apple", 5, "apple_value", 11);
+ctdb_put(trans, "app", 3, "app_value", 9);
+ctdb_put(trans, "application", 11, "application_value", 17);
+ctdb_transaction_commit(trans);
+//ctdb_transaction_rollback(trans);
 
-rtdb_transaction_free(trans);
-rtdb_close(db);
+ctdb_transaction_free(trans);
+ctdb_close(db);
 ```
 
 ```c
-struct rtdb *db = rtdb_open("./test.db");
+struct ctdb *db = ctdb_open("./test.db");
 
-struct rtdb_leaf *leaf = rtdb_get(db, "app", 3);
+struct ctdb_leaf *leaf = ctdb_get(db, "app", 3);
 printf("app: %.*s\n", leaf->value_len, leaf->value);
-rtdb_leaf_free(leaf);
+ctdb_leaf_free(leaf);
 
-rtdb_close(db);
+ctdb_close(db);
 ```

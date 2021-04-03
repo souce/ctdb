@@ -22,7 +22,7 @@ extern "C" {
 #endif
 
 #define RTDB_HEADER_SIZE 128
-#define RTDB_MAGIC_STR "rtdb"
+#define RTDB_MAGIC_STR "ctdb"
 #define RTDB_MAGIC_LEN 4
 #define RTDB_VERSION_NUM 1
 
@@ -40,30 +40,30 @@ extern "C" {
 #define RTDB_OK 0
 #define RTDB_ERR -1
 
-struct rtdb_footer{
+struct ctdb_footer{
     uint64_t tran_count;
     uint64_t del_count;
     off_t root_pos;
 };
 
-struct rtdb{
+struct ctdb{
     int fd;
-    struct rtdb_footer footer;
+    struct ctdb_footer footer;
 };
 
-struct rtdb_node{
+struct ctdb_node{
     uint8_t prefix_len;
     char prefix[RTDB_MAX_KEY_LEN + 1];
     off_t leaf_pos;
     
     uint8_t items_count;
-    struct rtdb_node_item{
+    struct ctdb_node_item{
         char sub_prefix_char;
         off_t sub_node_pos;
     }items[RTDB_MAX_CHAR_RANGE];
 };
 
-struct rtdb_leaf{
+struct ctdb_leaf{
     //int create_time;
     //int expire;
     //int fingerprint;
@@ -71,27 +71,27 @@ struct rtdb_leaf{
     char *value;
 };
 
-struct rtdb_transaction{
+struct ctdb_transaction{
     uint8_t is_isvalid;
-    struct rtdb *db;
-    struct rtdb_footer new_footer;
+    struct ctdb *db;
+    struct ctdb_footer new_footer;
 };
 
 //API
-struct rtdb *rtdb_open(char *path);
-struct rtdb_leaf *rtdb_get(struct rtdb *db, char *key, int key_len);
-void rtdb_leaf_free(struct rtdb_leaf *leaf);
-struct rtdb_transaction *rtdb_transaction_begin(struct rtdb *db);
-int rtdb_put(struct rtdb_transaction *trans, char *key, int key_len, char *value, int value_len);
-int rtdb_del(struct rtdb_transaction *trans, char *key, int key_len);
-int rtdb_transaction_commit(struct rtdb_transaction *trans);
-void rtdb_transaction_rollback(struct rtdb_transaction *trans);
-void rtdb_transaction_free(struct rtdb_transaction *trans);
-void rtdb_close(struct rtdb *db);
+struct ctdb *ctdb_open(char *path);
+struct ctdb_leaf *ctdb_get(struct ctdb *db, char *key, int key_len);
+void ctdb_leaf_free(struct ctdb_leaf *leaf);
+struct ctdb_transaction *ctdb_transaction_begin(struct ctdb *db);
+int ctdb_put(struct ctdb_transaction *trans, char *key, int key_len, char *value, int value_len);
+int ctdb_del(struct ctdb_transaction *trans, char *key, int key_len);
+int ctdb_transaction_commit(struct ctdb_transaction *trans);
+void ctdb_transaction_rollback(struct ctdb_transaction *trans);
+void ctdb_transaction_free(struct ctdb_transaction *trans);
+void ctdb_close(struct ctdb *db);
 
 //iterator
-typedef int rtdb_traversal(char *key, int key_len, struct rtdb_leaf *leaf);
-int rtdb_iterator_travel(struct rtdb *db, rtdb_traversal *traversal);
+typedef int ctdb_traversal(char *key, int key_len, struct ctdb_leaf *leaf);
+int ctdb_iterator_travel(struct ctdb *db, ctdb_traversal *traversal);
 
 #ifdef __cplusplus
 }
