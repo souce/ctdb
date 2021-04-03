@@ -248,7 +248,7 @@ void ctdb_close(struct ctdb *db) {
     free(db);
 }
 
-static off_t find_node_from_file(int fd, struct ctdb_node *trav, char *prefix, int prefix_len, int prefix_pos) {
+static off_t find_leaf(int fd, struct ctdb_node *trav, char *prefix, int prefix_len, int prefix_pos) {
     while (prefix_len > prefix_pos) {
         char prefix_char = prefix[prefix_pos];
         struct ctdb_node_item key_item = {.sub_prefix_char = prefix_char, .sub_node_pos = 0};
@@ -269,7 +269,7 @@ static off_t find_node_from_file(int fd, struct ctdb_node *trav, char *prefix, i
 
         if (sub_node_prefix_pos == sub_node.prefix_len) {
             //continue to traverse to the next node of the tree
-            return find_node_from_file(fd, &sub_node, prefix, prefix_len, key_prefix_pos);
+            return find_leaf(fd, &sub_node, prefix, prefix_len, key_prefix_pos);
         }
         goto err;  //the current node's prefix does not match the key, stop searching
     }
@@ -290,7 +290,7 @@ struct ctdb_leaf *ctdb_get(struct ctdb *db, char *key, int key_len) {
     //search the prefix nodes related to key from the file
     char filled_prefix_key[RTDB_MAX_KEY_LEN + 1] = {[0 ... RTDB_MAX_KEY_LEN] = 0};
     if (filled_prefix_key != strncpy(filled_prefix_key, key, key_len)) goto err;
-    off_t leaf_pos = find_node_from_file(db->fd, &root, filled_prefix_key, key_len, 0);
+    off_t leaf_pos = find_leaf(db->fd, &root, filled_prefix_key, key_len, 0);
     if (0 >= leaf_pos) goto err;  //no data found
 
     leaf = calloc(1, sizeof(*leaf));
@@ -333,7 +333,7 @@ static void put_node_in_items(struct ctdb_node *father_node, char sub_prefix_cha
     }
 }
 
-static off_t append_node_to_the_end(int fd, struct ctdb_node *trav, char *prefix, int prefix_len, int prefix_pos, off_t leaf_pos) {
+static off_t append_node(int fd, struct ctdb_node *trav, char *prefix, int prefix_len, int prefix_pos, off_t leaf_pos) {
     while (prefix_len > prefix_pos) {
         char prefix_char = prefix[prefix_pos];
         struct ctdb_node_item key_item = {.sub_prefix_char = prefix_char, .sub_node_pos = 0};
@@ -355,7 +355,7 @@ static off_t append_node_to_the_end(int fd, struct ctdb_node *trav, char *prefix
 
         if (sub_node_prefix_pos == sub_node.prefix_len) {
             //continue to traverse to the next node of the tree
-            off_t new_node_pos = append_node_to_the_end(fd, &sub_node, prefix, prefix_len, key_prefix_pos, leaf_pos);
+            off_t new_node_pos = append_node(fd, &sub_node, prefix, prefix_len, key_prefix_pos, leaf_pos);
             if (0 >= new_node_pos) goto err;
             put_node_in_items(trav, sub_node.prefix[0], new_node_pos);
             return dump_node(fd, trav);  //append the node to the end of file
@@ -438,7 +438,7 @@ int ctdb_put(struct ctdb_transaction *trans, char *key, int key_len, char *value
     //update the prefix nodes
     char filled_prefix_key[RTDB_MAX_KEY_LEN + 1] = {[0 ... RTDB_MAX_KEY_LEN] = 0};
     if (filled_prefix_key != strncpy(filled_prefix_key, key, key_len)) goto err;
-    trans->new_footer.root_pos = append_node_to_the_end(trans->db->fd, &root, filled_prefix_key, key_len, 0, new_leaf_pos);
+    trans->new_footer.root_pos = append_node(trans->db->fd, &root, filled_prefix_key, key_len, 0, new_leaf_pos);
     if (0 >= trans->new_footer.root_pos) goto err;
 
     //cumulative the operation count
