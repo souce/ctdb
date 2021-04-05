@@ -146,6 +146,9 @@ void simple_test() {
     printf("-----------------------\n");
 
     assert(NULL != (trans = ctdb_transaction_begin(db)));
+    assert(RTDB_OK == ctdb_del(trans, "app", 3));
+    assert(RTDB_OK == ctdb_del(trans, "apple", 5));
+    assert(RTDB_OK == ctdb_del(trans, "application", 11));
     assert(RTDB_OK == ctdb_del(trans, "xxx", 3));
     assert(RTDB_OK == ctdb_transaction_commit(trans));
     ctdb_transaction_free(trans);
@@ -366,7 +369,7 @@ void test_iter(int count) {
     char *path = "./test.db";
     struct ctdb *db = ctdb_open(path);
     assert(NULL != db);
-    /*
+    
     int i = 0;
     for(; i < count; i++){
         char *key = random_str_shortly(key_len);
@@ -385,19 +388,19 @@ void test_iter(int count) {
         ctdb_leaf_free(leaf);
         free(key);
     }
-    */
+    
 #if defined(__APPLE__)
-    if(RTDB_OK == ctdb_iterator_travel(db, "", 0, traversal)){
+    if(RTDB_OK == ctdb_iterator_travel(db, "ap", 2, traversal)){
         printf("iterator sucess\n");
     }
 #else
     int traversal(char *key, int key_len, struct ctdb_leaf *leaf){
         g_iter_count += 1;
-        assert(key_len == leaf->value_len && 0 == strncmp(key, leaf->value, key_len));
         printf("key:%.*s value:%.*s\n", key_len, key, leaf->value_len, leaf->value);
+        assert(key_len == leaf->value_len && 0 == strncmp(key, leaf->value, key_len));
         return RTDB_OK; //continue
     }
-    if(RTDB_OK == ctdb_iterator_travel(db, "zl", 2, traversal)){
+    if(RTDB_OK == ctdb_iterator_travel(db, "ap", 2, traversal)){
         printf("iterator sucess\n");
     }
 #endif
@@ -408,10 +411,10 @@ void test_iter(int count) {
 int main(){
     srand(time(NULL));
 
-    //simple_test();
-    //stress_put_testing_single_transaction(5, 10000);
-    //stress_put_testing_multiple_transactions(5000);
-    //stress_get_testing(50000);
+    simple_test();
+    stress_put_testing_single_transaction(5, 10000);
+    stress_put_testing_multiple_transactions(5000);
+    stress_get_testing(50000);
     
     //transction_test();
     //transction_test2();
