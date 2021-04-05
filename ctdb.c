@@ -248,33 +248,37 @@ void ctdb_close(struct ctdb *db) {
     free(db);
 }
 
-static off_t find_leaf(int fd, struct ctdb_node *trav, char *prefix, int prefix_len, int prefix_pos) {
-    while (prefix_len > prefix_pos) {
-        char prefix_char = prefix[prefix_pos];
-        struct ctdb_node_item key_item = {.sub_prefix_char = prefix_char, .sub_node_pos = 0};
-        struct ctdb_node_item *item = (struct ctdb_node_item *)bsearch(&key_item, trav->items, trav->items_count, sizeof(key_item), item_cmp);
-        if (NULL == item) goto err;  //the item not found in child nodes, stop searching
-
-        //load node from the file
-        struct ctdb_node sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
-        if (RTDB_OK != load_node(fd, item->sub_node_pos, &sub_node)) goto err;
+static off_t find_node(int fd, off_t trav_pos, char *prefix, int prefix_len, int prefix_pos, int is_fuzzy) {
+    if(prefix_len == prefix_pos) return trav_pos;  //no need to match
+    if(prefix_len > prefix_pos) {
+        struct ctdb_node trav = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
+        if (RTDB_OK != load_node(fd, trav_pos, &trav)) goto err;
 
         //across the same prefix
         int key_prefix_pos = prefix_pos;
-        int sub_node_prefix_pos = 0;
-        while (sub_node_prefix_pos < sub_node.prefix_len && key_prefix_pos < prefix_len && prefix[key_prefix_pos] == sub_node.prefix[sub_node_prefix_pos]) {
+        int trav_prefix_pos = 0;
+        while (trav_prefix_pos < trav.prefix_len && 
+                key_prefix_pos < prefix_len && 
+                prefix[key_prefix_pos] == trav.prefix[trav_prefix_pos]) {
             ++key_prefix_pos;
-            ++sub_node_prefix_pos;
+            ++trav_prefix_pos;
         };
 
-        if (sub_node_prefix_pos == sub_node.prefix_len) {
+        //fuzzy matching
+        if(is_fuzzy && key_prefix_pos == prefix_len) return trav_pos;
+        
+        if (trav_prefix_pos == trav.prefix_len) {
+            if(key_prefix_pos == prefix_len) return trav_pos;  //the trav_node prefix must match completely
+            
+            char prefix_char = prefix[key_prefix_pos];
+            struct ctdb_node_item key_item = {.sub_prefix_char = prefix_char, .sub_node_pos = 0};
+            struct ctdb_node_item *item = (struct ctdb_node_item *)bsearch(&key_item, trav.items, trav.items_count, sizeof(key_item), item_cmp);
+            if (NULL == item) goto err;  //the item not found in child nodes, stop searching
             //continue to traverse to the next node of the tree
-            return find_leaf(fd, &sub_node, prefix, prefix_len, key_prefix_pos);
+            return find_node(fd, item->sub_node_pos, prefix, prefix_len, key_prefix_pos, is_fuzzy);
         }
         goto err;  //the current node's prefix does not match the key, stop searching
     }
-    return trav->leaf_pos;
-
 err:
     return 0;
 }
@@ -284,17 +288,18 @@ struct ctdb_leaf *ctdb_get(struct ctdb *db, char *key, int key_len) {
     if (0 >= key_len || RTDB_MAX_KEY_LEN < key_len || NULL == key) goto err;
     if (0 >= db->footer.root_pos) goto err;
 
-    struct ctdb_node root = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
-    if (RTDB_OK != load_node(db->fd, db->footer.root_pos, &root)) goto err;
-
     //search the prefix nodes related to key from the file
     char filled_prefix_key[RTDB_MAX_KEY_LEN + 1] = {[0 ... RTDB_MAX_KEY_LEN] = 0};
     if (filled_prefix_key != strncpy(filled_prefix_key, key, key_len)) goto err;
-    off_t leaf_pos = find_leaf(db->fd, &root, filled_prefix_key, key_len, 0);
-    if (0 >= leaf_pos) goto err;  //no data found
+    
+    //load node from the file
+    off_t sub_node_pos = find_node(db->fd, db->footer.root_pos, filled_prefix_key, key_len, 0, 0);  //not fuzzy match
+    if (0 >= sub_node_pos) goto err;  //no data found
+    struct ctdb_node sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
+    if (RTDB_OK != load_node(db->fd, sub_node_pos, &sub_node)) goto err;
 
     leaf = calloc(1, sizeof(*leaf));
-    if (NULL == leaf || RTDB_OK != load_leaf(db->fd, leaf_pos, leaf)) goto err;
+    if (NULL == leaf || RTDB_OK != load_leaf(db->fd, sub_node.leaf_pos, leaf)) goto err;
     if (0 == leaf->value_len) goto err;  //the data has been deleted
     return leaf;
 
@@ -515,10 +520,27 @@ over:
     return RTDB_ERR;
 }
 
-int ctdb_iterator_travel(struct ctdb *db, ctdb_traversal *traversal) {
-    struct ctdb_node root = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
-    if (RTDB_OK == load_node(db->fd, db->footer.root_pos, &root)) {
-        return iterator_travel(db->fd, &root, "", 0, traversal);
+int ctdb_iterator_travel(struct ctdb *db, char *key, int key_len, ctdb_traversal *traversal) {
+    if(RTDB_MAX_KEY_LEN < key_len) goto err;
+
+    //search the prefix nodes related to key from the file
+    char filled_prefix_key[RTDB_MAX_KEY_LEN + 1] = {[0 ... RTDB_MAX_KEY_LEN] = 0};
+    if (filled_prefix_key != strncpy(filled_prefix_key, key, key_len)) goto err;
+    off_t sub_node_pos = find_node(db->fd, db->footer.root_pos, filled_prefix_key, key_len, 0, 1);  //fuzzy match
+    if (0 >= sub_node_pos) goto err;  //no data found
+    
+    //load node from the file
+    struct ctdb_node sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
+    if (RTDB_OK == load_node(db->fd, sub_node_pos, &sub_node)){
+        int start_pos = 0;
+        for(; start_pos < sub_node.prefix_len; start_pos++){
+            if(filled_prefix_key[key_len - start_pos - 1] != sub_node.prefix[start_pos])
+                break;
+        }
+        return iterator_travel(db->fd, &sub_node, key, key_len - start_pos, traversal);
     }
+
+err:
     return RTDB_ERR;
 }
+

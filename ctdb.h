@@ -91,7 +91,8 @@ void ctdb_close(struct ctdb *db);
 
 //iterator
 typedef int ctdb_traversal(char *key, int key_len, struct ctdb_leaf *leaf);
-int ctdb_iterator_travel(struct ctdb *db, ctdb_traversal *traversal);
+//int ctdb_iterator_travel(struct ctdb *db, ctdb_traversal *traversal);
+int ctdb_iterator_travel(struct ctdb *db, char *key, int key_len, ctdb_traversal *traversal);
 
 #ifdef __cplusplus
 }
