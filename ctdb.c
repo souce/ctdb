@@ -294,6 +294,7 @@ static off_t find_node(int fd, off_t trav_pos, char *prefix, int prefix_len, int
         }
         goto err;  //the current node's prefix does not match the key, stop searching
     }
+
 err:
     return 0;
 }
