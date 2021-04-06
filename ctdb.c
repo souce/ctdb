@@ -33,42 +33,42 @@
 // SERIALIZER
 ///////////////////////////////////////////////////////////////////////////////
 static inline int check_header(int fd) {
-    char magic_str[RTDB_MAGIC_LEN + 1] = {[0 ... RTDB_MAGIC_LEN] = 0};
+    char magic_str[CTDB_MAGIC_LEN + 1] = {[0 ... CTDB_MAGIC_LEN] = 0};
     int version_num = -1;
-    char header_buf[RTDB_HEADER_SIZE + 1] = {[0 ... RTDB_HEADER_SIZE] = 0}, *buf = header_buf, *end = &(header_buf[RTDB_HEADER_SIZE]);
-    if (-1 == lseek(fd, 0, SEEK_SET)) return RTDB_ERR;  //get back to the beginning
-    if (RTDB_HEADER_SIZE != read(fd, header_buf, RTDB_HEADER_SIZE)) return RTDB_ERR;
-    if (SERIALIZER_OK != SERIALIZER_BUF_READ_STR(buf, end, magic_str, RTDB_MAGIC_LEN) ||
+    char header_buf[CTDB_HEADER_SIZE + 1] = {[0 ... CTDB_HEADER_SIZE] = 0}, *buf = header_buf, *end = &(header_buf[CTDB_HEADER_SIZE]);
+    if (-1 == lseek(fd, 0, SEEK_SET)) return CTDB_ERR;  //get back to the beginning
+    if (CTDB_HEADER_SIZE != read(fd, header_buf, CTDB_HEADER_SIZE)) return CTDB_ERR;
+    if (SERIALIZER_OK != SERIALIZER_BUF_READ_STR(buf, end, magic_str, CTDB_MAGIC_LEN) ||
         SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, version_num, uint32_t)) {
-        return RTDB_ERR;
+        return CTDB_ERR;
     }
-    if (0 == strncmp(magic_str, RTDB_MAGIC_STR, RTDB_MAGIC_LEN) && RTDB_VERSION_NUM == version_num)
-        return RTDB_OK;
-    return RTDB_ERR;
+    if (0 == strncmp(magic_str, CTDB_MAGIC_STR, CTDB_MAGIC_LEN) && CTDB_VERSION_NUM == version_num)
+        return CTDB_OK;
+    return CTDB_ERR;
 }
 
 static inline int dump_header(int fd) {
-    char header_buf[RTDB_HEADER_SIZE + 1] = {[0 ... RTDB_HEADER_SIZE] = 0}, *buf = header_buf, *end = &(header_buf[RTDB_HEADER_SIZE]);
-    if (SERIALIZER_OK != SERIALIZER_BUF_WRITE_STR(buf, end, RTDB_MAGIC_STR, RTDB_MAGIC_LEN) ||
-        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, RTDB_VERSION_NUM, uint32_t)) {
-        return RTDB_ERR;
+    char header_buf[CTDB_HEADER_SIZE + 1] = {[0 ... CTDB_HEADER_SIZE] = 0}, *buf = header_buf, *end = &(header_buf[CTDB_HEADER_SIZE]);
+    if (SERIALIZER_OK != SERIALIZER_BUF_WRITE_STR(buf, end, CTDB_MAGIC_STR, CTDB_MAGIC_LEN) ||
+        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, CTDB_VERSION_NUM, uint32_t)) {
+        return CTDB_ERR;
     }
-    if (-1 == lseek(fd, 0, SEEK_SET)) return RTDB_ERR;  //get back to the beginning
-    if (RTDB_HEADER_SIZE != write(fd, header_buf, RTDB_HEADER_SIZE)) return RTDB_ERR;
-    return RTDB_OK;
+    if (-1 == lseek(fd, 0, SEEK_SET)) return CTDB_ERR;  //get back to the beginning
+    if (CTDB_HEADER_SIZE != write(fd, header_buf, CTDB_HEADER_SIZE)) return CTDB_ERR;
+    return CTDB_OK;
 }
 
-#define FOOTER_ALIGNED(num) ({ ((num) + RTDB_FOOTER_ALIGNED_BASE - 1) & ~(RTDB_FOOTER_ALIGNED_BASE - 1); });
+#define FOOTER_ALIGNED(num) ({ ((num) + CTDB_FOOTER_ALIGNED_BASE - 1) & ~(CTDB_FOOTER_ALIGNED_BASE - 1); });
 
 static inline int load_footer(int fd, struct ctdb_footer *footer) {
-    off_t file_size = lseek(fd, -RTDB_FOOTER_ALIGNED_BASE, SEEK_END);
+    off_t file_size = lseek(fd, -CTDB_FOOTER_ALIGNED_BASE, SEEK_END);
     off_t flag_aligned_pos = FOOTER_ALIGNED(file_size);  //find the right place for the 'transaction flag'
-    while (flag_aligned_pos > RTDB_HEADER_SIZE + RTDB_FOOTER_ALIGNED_BASE) {
+    while (flag_aligned_pos > CTDB_HEADER_SIZE + CTDB_FOOTER_ALIGNED_BASE) {
         int16_t cksum_1 = 1, cksum_2 = 2;
-        char *buf = (char[RTDB_FOOTER_SIZE + 1]){[0 ... RTDB_FOOTER_SIZE] = 0}, *end = &(buf[RTDB_FOOTER_SIZE]);
+        char *buf = (char[CTDB_FOOTER_SIZE + 1]){[0 ... CTDB_FOOTER_SIZE] = 0}, *end = &(buf[CTDB_FOOTER_SIZE]);
         struct ctdb_footer footer_in_file = {.tran_count = 0, .del_count = 0, .root_pos = 0};
         if (-1 == lseek(fd, flag_aligned_pos, SEEK_SET)) goto retry;
-        if (RTDB_FOOTER_SIZE != read(fd, buf, RTDB_FOOTER_SIZE)) goto retry;
+        if (CTDB_FOOTER_SIZE != read(fd, buf, CTDB_FOOTER_SIZE)) goto retry;
         if (SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, cksum_1, int16_t) ||
             SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, footer_in_file.tran_count, uint64_t) ||
             SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, footer_in_file.del_count, uint64_t) ||
@@ -78,86 +78,86 @@ static inline int load_footer(int fd, struct ctdb_footer *footer) {
         }
         if (0 != cksum_1 && cksum_1 == cksum_2) {  //check the mark, make sure the data is correct
             *footer = footer_in_file;
-            return RTDB_OK;
+            return CTDB_OK;
         }
     retry:
-        flag_aligned_pos -= RTDB_FOOTER_ALIGNED_BASE;  //when searching for the 'transaction flag', it spans an alignment length at a time
+        flag_aligned_pos -= CTDB_FOOTER_ALIGNED_BASE;  //when searching for the 'transaction flag', it spans an alignment length at a time
         continue;
     }
     *footer = (struct ctdb_footer){.tran_count = 0, .del_count = 0, .root_pos = 0};
-    return RTDB_ERR;
+    return CTDB_ERR;
 }
 
 #define RANDOM_CKSUM() ({ int16_t min = 1, max = INT16_MAX; rand() % (max - min + 1) + min; })
 static inline int dump_footer(int fd, struct ctdb_footer *footer) {
-    char footer_buf[RTDB_FOOTER_SIZE + 1] = {[0 ... RTDB_FOOTER_SIZE] = 0}, *buf = footer_buf, *end = &(footer_buf[RTDB_FOOTER_SIZE]);
+    char footer_buf[CTDB_FOOTER_SIZE + 1] = {[0 ... CTDB_FOOTER_SIZE] = 0}, *buf = footer_buf, *end = &(footer_buf[CTDB_FOOTER_SIZE]);
     int16_t cksum = RANDOM_CKSUM();
     if (SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, cksum, int16_t) ||
         SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, footer->tran_count, uint64_t) ||
         SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, footer->del_count, uint64_t) ||
         SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, footer->root_pos, uint64_t) ||
         SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, cksum, int16_t)) {
-        return RTDB_ERR;
+        return CTDB_ERR;
     }
     off_t file_size = lseek(fd, 0, SEEK_END);
     off_t flag_aligned_pos = FOOTER_ALIGNED(file_size);  //find a right position to write the 'transaction flag'
-    if (-1 == lseek(fd, flag_aligned_pos, SEEK_SET)) return RTDB_ERR;
-    if (RTDB_FOOTER_SIZE != write(fd, footer_buf, RTDB_FOOTER_SIZE)) return RTDB_ERR;
-    return RTDB_OK;
+    if (-1 == lseek(fd, flag_aligned_pos, SEEK_SET)) return CTDB_ERR;
+    if (CTDB_FOOTER_SIZE != write(fd, footer_buf, CTDB_FOOTER_SIZE)) return CTDB_ERR;
+    return CTDB_OK;
 }
 
 static inline int load_items(int fd, int items_count, struct ctdb_node_item *items) {
-    int item_size = items_count * RTDB_ITEMS_SIZE;
+    int item_size = items_count * CTDB_ITEMS_SIZE;
     char item_buf[item_size], *buf = item_buf, *end = &(item_buf[item_size - 1]);
-    if (item_size != read(fd, item_buf, item_size)) return RTDB_ERR;
+    if (item_size != read(fd, item_buf, item_size)) return CTDB_ERR;
     int i = 0;
     for (; i < items_count; i++) {
         if (SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, items[i].sub_prefix_char, uint8_t) ||
             SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, items[i].sub_node_pos, uint64_t)) {
-            return RTDB_ERR;
+            return CTDB_ERR;
         }
     }
-    return RTDB_OK;
+    return CTDB_OK;
 }
 static int load_node(int fd, off_t node_pos, struct ctdb_node *node) {
-    char *buf = (char[RTDB_NODE_SIZE + 1]){[0 ... RTDB_NODE_SIZE] = 0}, *end = &(buf[RTDB_NODE_SIZE]);
-    if (-1 == lseek(fd, node_pos, SEEK_SET)) return RTDB_ERR;
-    if (RTDB_NODE_SIZE != read(fd, buf, RTDB_NODE_SIZE)) return RTDB_ERR;
+    char *buf = (char[CTDB_NODE_SIZE + 1]){[0 ... CTDB_NODE_SIZE] = 0}, *end = &(buf[CTDB_NODE_SIZE]);
+    if (-1 == lseek(fd, node_pos, SEEK_SET)) return CTDB_ERR;
+    if (CTDB_NODE_SIZE != read(fd, buf, CTDB_NODE_SIZE)) return CTDB_ERR;
     if (SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, node->prefix_len, uint8_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_READ_STR(buf, end, node->prefix, RTDB_MAX_KEY_LEN) ||
+        SERIALIZER_OK != SERIALIZER_BUF_READ_STR(buf, end, node->prefix, CTDB_MAX_KEY_LEN) ||
         SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, node->leaf_pos, uint64_t) ||
         SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, node->items_count, uint8_t)) {
-        return RTDB_ERR;
+        return CTDB_ERR;
     }
-    if (RTDB_OK != load_items(fd, node->items_count, node->items)) return RTDB_ERR;
-    return RTDB_OK;
+    if (CTDB_OK != load_items(fd, node->items_count, node->items)) return CTDB_ERR;
+    return CTDB_OK;
 }
 
 static inline int dump_items(int fd, int items_count, struct ctdb_node_item *items) {
-    int item_size = items_count * RTDB_ITEMS_SIZE;
+    int item_size = items_count * CTDB_ITEMS_SIZE;
     char item_buf[item_size], *buf = item_buf, *end = &(item_buf[item_size - 1]);
     int i = 0;
     for (; i < items_count; i++) {
         if (SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, items[i].sub_prefix_char, uint8_t) ||
             SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, items[i].sub_node_pos, uint64_t)) {
-            return RTDB_ERR;
+            return CTDB_ERR;
         }
     }
-    if (item_size != write(fd, item_buf, item_size)) return RTDB_ERR;
-    return RTDB_OK;
+    if (item_size != write(fd, item_buf, item_size)) return CTDB_ERR;
+    return CTDB_OK;
 }
 static off_t dump_node(int fd, struct ctdb_node *node) {
-    char node_buf[RTDB_NODE_SIZE + 1] = {[0 ... RTDB_NODE_SIZE] = 0}, *buf = node_buf, *end = &(node_buf[RTDB_NODE_SIZE]);
+    char node_buf[CTDB_NODE_SIZE + 1] = {[0 ... CTDB_NODE_SIZE] = 0}, *buf = node_buf, *end = &(node_buf[CTDB_NODE_SIZE]);
     if (SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, node->prefix_len, uint8_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_WRITE_STR(buf, end, node->prefix, RTDB_MAX_KEY_LEN) ||
+        SERIALIZER_OK != SERIALIZER_BUF_WRITE_STR(buf, end, node->prefix, CTDB_MAX_KEY_LEN) ||
         SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, node->leaf_pos, uint64_t) ||
         SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, node->items_count, uint8_t)) {
         goto err;
     }
     off_t node_pos = lseek(fd, 0, SEEK_END);  //reach to the end
     if (-1 == node_pos) goto err;
-    if (RTDB_NODE_SIZE != write(fd, node_buf, RTDB_NODE_SIZE)) goto err;
-    if (RTDB_OK != dump_items(fd, node->items_count, node->items)) goto err;
+    if (CTDB_NODE_SIZE != write(fd, node_buf, CTDB_NODE_SIZE)) goto err;
+    if (CTDB_OK != dump_items(fd, node->items_count, node->items)) goto err;
     return node_pos;
 
 err:
@@ -170,14 +170,14 @@ static int load_leaf(int fd, off_t leaf_pos, struct ctdb_leaf *leaf) {
         SERIALIZER_OK != SERIALIZER_IO_READ_NEW_STR(fd, leaf->value, leaf->value_len)) {
         goto err;
     }
-    return RTDB_OK;
+    return CTDB_OK;
 
 err:
     if (NULL != leaf->value)
         free(leaf->value);
     leaf->value = NULL;
     leaf->value_len = 0;
-    return RTDB_ERR;
+    return CTDB_ERR;
 }
 
 static off_t dump_leaf(int fd, struct ctdb_leaf *leaf) {
@@ -196,13 +196,28 @@ err:
 ///////////////////////////////////////////////////////////////////////////////
 // COMMEN
 ///////////////////////////////////////////////////////////////////////////////
-static inline int prefix_copy(char *filled_prefix_dst, uint8_t *prefix_dst_len, char *filled_prefix_src, int max_len) {
-    //the prefix's length is "RTDB_MAX_KEY_LEN + 1", it's safe
-    if (max_len <= RTDB_MAX_KEY_LEN && filled_prefix_dst == strncpy(filled_prefix_dst, filled_prefix_src, max_len)) {
-        if (NULL != prefix_dst_len) *prefix_dst_len = strnlen(filled_prefix_dst, RTDB_MAX_KEY_LEN);
-        return RTDB_OK;
+static inline int prefix_copy(char *filled_prefix_dst, uint8_t *prefix_dst_len, char *filled_prefix_src, uint8_t max_len) {
+    //the prefix's length is "CTDB_MAX_KEY_LEN + 1", it's safe
+    if (CTDB_MAX_KEY_LEN < max_len) goto err;
+    if (filled_prefix_dst == strncpy(filled_prefix_dst, filled_prefix_src, max_len)) {
+        if (NULL != prefix_dst_len) *prefix_dst_len = strnlen(filled_prefix_dst, CTDB_MAX_KEY_LEN);
+        return CTDB_OK;
     }
-    return RTDB_ERR;
+
+err:
+    return CTDB_ERR;
+}
+
+static inline int prefix_start_at(char *filled_prefix, uint8_t filled_prefix_len, char *node_prefix, uint8_t node_prefix_len) {
+    if(CTDB_MAX_KEY_LEN < filled_prefix_len || CTDB_MAX_KEY_LEN < node_prefix_len) goto err;
+    int readn = 0;
+    char diff_format[CTDB_MAX_KEY_LEN + 10];
+    if(0 >= snprintf(diff_format, CTDB_MAX_KEY_LEN + 10, "%%*[^%.*s]%%n", node_prefix_len, node_prefix)) goto err;
+    sscanf(filled_prefix, diff_format, &readn);
+    return readn;
+
+err:
+    return -1;
 }
 
 static int item_cmp(const void *a, const void *b) {
@@ -252,7 +267,7 @@ static off_t find_node(int fd, off_t trav_pos, char *prefix, int prefix_len, int
     if(prefix_len == prefix_pos) return trav_pos;  //no need to match
     if(prefix_len > prefix_pos) {
         struct ctdb_node trav = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
-        if (RTDB_OK != load_node(fd, trav_pos, &trav)) goto err;
+        if (CTDB_OK != load_node(fd, trav_pos, &trav)) goto err;
 
         //across the same prefix
         int key_prefix_pos = prefix_pos;
@@ -285,21 +300,21 @@ err:
 
 struct ctdb_leaf *ctdb_get(struct ctdb *db, char *key, int key_len) {
     struct ctdb_leaf *leaf = NULL;
-    if (0 >= key_len || RTDB_MAX_KEY_LEN < key_len || NULL == key) goto err;
+    if (0 >= key_len || CTDB_MAX_KEY_LEN < key_len || NULL == key) goto err;
     if (0 >= db->footer.root_pos) goto err;
 
     //search the prefix nodes related to key from the file
-    char filled_prefix_key[RTDB_MAX_KEY_LEN + 1] = {[0 ... RTDB_MAX_KEY_LEN] = 0};
+    char filled_prefix_key[CTDB_MAX_KEY_LEN + 1] = {[0 ... CTDB_MAX_KEY_LEN] = 0};
     if (filled_prefix_key != strncpy(filled_prefix_key, key, key_len)) goto err;
     
     //load node from the file
     off_t sub_node_pos = find_node(db->fd, db->footer.root_pos, filled_prefix_key, key_len, 0, 0);  //not fuzzy match
     if (0 >= sub_node_pos) goto err;  //no data found
     struct ctdb_node sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
-    if (RTDB_OK != load_node(db->fd, sub_node_pos, &sub_node)) goto err;
+    if (CTDB_OK != load_node(db->fd, sub_node_pos, &sub_node)) goto err;
 
     leaf = calloc(1, sizeof(*leaf));
-    if (NULL == leaf || RTDB_OK != load_leaf(db->fd, sub_node.leaf_pos, leaf)) goto err;
+    if (NULL == leaf || CTDB_OK != load_leaf(db->fd, sub_node.leaf_pos, leaf)) goto err;
     if (0 == leaf->value_len) goto err;  //the data has been deleted
     return leaf;
 
@@ -333,7 +348,7 @@ static void put_node_in_items(struct ctdb_node *father_node, char sub_prefix_cha
     if (exists_item != NULL) {
         exists_item->sub_node_pos = sub_node_pos;
     } else {
-        father_node->items[father_node->items_count++] = new_item; //as long as the 'RTDB_MAX_CHAR_RANGE' is 256, it will not out of the bounds
+        father_node->items[father_node->items_count++] = new_item; //as long as the 'CTDB_MAX_CHAR_RANGE' is 256, it will not out of the bounds
         qsort(father_node->items, father_node->items_count, sizeof(struct ctdb_node_item), item_cmp);
     }
 }
@@ -347,7 +362,7 @@ static off_t append_node(int fd, struct ctdb_node *trav, char *prefix, int prefi
 
         //load node from the file
         struct ctdb_node sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
-        if (RTDB_OK != load_node(fd, item->sub_node_pos, &sub_node)) goto err;
+        if (CTDB_OK != load_node(fd, item->sub_node_pos, &sub_node)) goto err;
 
         //across the same prefix
         int key_prefix_pos = prefix_pos;
@@ -365,20 +380,20 @@ static off_t append_node(int fd, struct ctdb_node *trav, char *prefix, int prefi
             put_node_in_items(trav, sub_node.prefix[0], new_node_pos);
             return dump_node(fd, trav);  //append the node to the end of file
         } else {
-            char old_remained[RTDB_MAX_KEY_LEN + 1] = {[0 ... RTDB_MAX_KEY_LEN] = 0};  //the old prefix does not include duplicate parts
-            if (RTDB_OK != prefix_copy(old_remained, NULL, sub_node.prefix + sub_node_prefix_pos, RTDB_MAX_KEY_LEN)) goto err;
-            char new_remained[RTDB_MAX_KEY_LEN + 1] = {[0 ... RTDB_MAX_KEY_LEN] = 0};  //the new prefix does not include duplicate parts
-            if (RTDB_OK != prefix_copy(new_remained, NULL, prefix + key_prefix_pos, RTDB_MAX_KEY_LEN)) goto err;
+            char old_remained[CTDB_MAX_KEY_LEN + 1] = {[0 ... CTDB_MAX_KEY_LEN] = 0};  //the old prefix does not include duplicate parts
+            if (CTDB_OK != prefix_copy(old_remained, NULL, sub_node.prefix + sub_node_prefix_pos, CTDB_MAX_KEY_LEN)) goto err;
+            char new_remained[CTDB_MAX_KEY_LEN + 1] = {[0 ... CTDB_MAX_KEY_LEN] = 0};  //the new prefix does not include duplicate parts
+            if (CTDB_OK != prefix_copy(new_remained, NULL, prefix + key_prefix_pos, CTDB_MAX_KEY_LEN)) goto err;
            
             if (key_prefix_pos == prefix_len) {
                 //if the new prefix has been traversed, the old prefix is longer and the new node should be inserted before the old node
-                if (RTDB_OK != prefix_copy(sub_node.prefix, &sub_node.prefix_len, old_remained, RTDB_MAX_KEY_LEN)) goto err;
+                if (CTDB_OK != prefix_copy(sub_node.prefix, &sub_node.prefix_len, old_remained, CTDB_MAX_KEY_LEN)) goto err;
                 off_t sub_node_pos = dump_node(fd, &sub_node);  //append the node to the end of file
                 if (0 >= sub_node_pos) goto err;
 
                 //old node as a child of new node
                 struct ctdb_node new_node = {.prefix_len = 0, .leaf_pos = leaf_pos, .items_count = 0};
-                if (RTDB_OK != prefix_copy(new_node.prefix, &new_node.prefix_len, prefix + prefix_pos, RTDB_MAX_KEY_LEN)) goto err;
+                if (CTDB_OK != prefix_copy(new_node.prefix, &new_node.prefix_len, prefix + prefix_pos, CTDB_MAX_KEY_LEN)) goto err;
                 put_node_in_items(&new_node, sub_node.prefix[0], sub_node_pos);
                 off_t new_node_pos = dump_node(fd, &new_node);  //append the node to the end of file
                 if (0 >= new_node_pos) goto err;
@@ -388,15 +403,15 @@ static off_t append_node(int fd, struct ctdb_node *trav, char *prefix, int prefi
             } else {
                 //the new prefix and the old prefix are not duplicate, split a common node to accommodate both
                 struct ctdb_node temp_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
-                if (RTDB_OK != prefix_copy(temp_node.prefix, &temp_node.prefix_len, sub_node.prefix, sub_node_prefix_pos)) goto err;
+                if (CTDB_OK != prefix_copy(temp_node.prefix, &temp_node.prefix_len, sub_node.prefix, sub_node_prefix_pos)) goto err;
 
-                if (RTDB_OK != prefix_copy(sub_node.prefix, &sub_node.prefix_len, old_remained, RTDB_MAX_KEY_LEN)) goto err;
+                if (CTDB_OK != prefix_copy(sub_node.prefix, &sub_node.prefix_len, old_remained, CTDB_MAX_KEY_LEN)) goto err;
                 off_t sub_node_pos = dump_node(fd, &sub_node);  //append the node to the end of file
                 if (0 >= sub_node_pos) goto err;
                 put_node_in_items(&temp_node, sub_node.prefix[0], sub_node_pos);
 
                 struct ctdb_node new_node = {.prefix_len = 0, .leaf_pos = leaf_pos, .items_count = 0};
-                if (RTDB_OK != prefix_copy(new_node.prefix, &new_node.prefix_len, new_remained, RTDB_MAX_KEY_LEN)) goto err;
+                if (CTDB_OK != prefix_copy(new_node.prefix, &new_node.prefix_len, new_remained, CTDB_MAX_KEY_LEN)) goto err;
                 off_t new_node_pos = dump_node(fd, &new_node);  //append the node to the end of file
                 if (0 >= new_node_pos) goto err;
                 put_node_in_items(&temp_node, new_node.prefix[0], new_node_pos);
@@ -410,7 +425,7 @@ static off_t append_node(int fd, struct ctdb_node *trav, char *prefix, int prefi
     if (prefix_pos < prefix_len) {
         //initialize the new node, or the new prefix is longer than the old prefix
         struct ctdb_node new_node = {.prefix_len = 0, .leaf_pos = leaf_pos, .items_count = 0};
-        if (RTDB_OK != prefix_copy(new_node.prefix, &new_node.prefix_len, prefix + prefix_pos, RTDB_MAX_KEY_LEN)) goto err;
+        if (CTDB_OK != prefix_copy(new_node.prefix, &new_node.prefix_len, prefix + prefix_pos, CTDB_MAX_KEY_LEN)) goto err;
         off_t new_node_pos = dump_node(fd, &new_node);  //append the node to the end of file
         if (0 >= new_node_pos) goto err;
         put_node_in_items(trav, new_node.prefix[0], new_node_pos);
@@ -427,12 +442,12 @@ err:
 
 int ctdb_put(struct ctdb_transaction *trans, char *key, int key_len, char *value, int value_len) {
     if (NULL == trans || 1 != trans->is_isvalid) goto err;  //verify that the transaction has not been committed or rolled back
-    if (0 >= key_len || RTDB_MAX_KEY_LEN < key_len || NULL == key) goto err;
-    if (0 > value_len || RTDB_MAX_VALUE_LEN < value_len || NULL == value) goto err;  //delete value (whether it exists or not)
+    if (0 >= key_len || CTDB_MAX_KEY_LEN < key_len || NULL == key) goto err;
+    if (0 > value_len || CTDB_MAX_VALUE_LEN < value_len || NULL == value) goto err;  //delete value (whether it exists or not)
 
     struct ctdb_node root = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
     if (0 < trans->new_footer.root_pos) {
-        if (RTDB_OK != load_node(trans->db->fd, trans->new_footer.root_pos, &root)) goto err;
+        if (CTDB_OK != load_node(trans->db->fd, trans->new_footer.root_pos, &root)) goto err;
     }
 
     //append the leaf node (value) to the file
@@ -441,7 +456,7 @@ int ctdb_put(struct ctdb_transaction *trans, char *key, int key_len, char *value
     if (0 >= new_leaf_pos) goto err;
 
     //update the prefix nodes
-    char filled_prefix_key[RTDB_MAX_KEY_LEN + 1] = {[0 ... RTDB_MAX_KEY_LEN] = 0};
+    char filled_prefix_key[CTDB_MAX_KEY_LEN + 1] = {[0 ... CTDB_MAX_KEY_LEN] = 0};
     if (filled_prefix_key != strncpy(filled_prefix_key, key, key_len)) goto err;
     trans->new_footer.root_pos = append_node(trans->db->fd, &root, filled_prefix_key, key_len, 0, new_leaf_pos);
     if (0 >= trans->new_footer.root_pos) goto err;
@@ -451,10 +466,10 @@ int ctdb_put(struct ctdb_transaction *trans, char *key, int key_len, char *value
     if (0 >= value_len || NULL == value)
         trans->new_footer.del_count += 1;
     
-    return RTDB_OK;
+    return CTDB_OK;
 
 err:
-    return RTDB_ERR;
+    return CTDB_ERR;
 }
 
 int ctdb_del(struct ctdb_transaction *trans, char *key, int key_len) {
@@ -467,13 +482,13 @@ int ctdb_transaction_commit(struct ctdb_transaction *trans) {
 
     struct ctdb *db = trans->db;
     //save the 'transaction flag', which means that the transaction was committed successfully
-    if (RTDB_OK != dump_footer(db->fd, &(trans->new_footer))) goto err;
+    if (CTDB_OK != dump_footer(db->fd, &(trans->new_footer))) goto err;
     if (-1 == fsync(db->fd)) goto err;
     db->footer = trans->new_footer;
-    return RTDB_OK;
+    return CTDB_OK;
 
 err:
-    return RTDB_ERR;
+    return CTDB_ERR;
 }
 
 void ctdb_transaction_rollback(struct ctdb_transaction *trans) {
@@ -492,16 +507,16 @@ void ctdb_transaction_free(struct ctdb_transaction *trans){
 // iterator
 ///////////////////////////////////////////////////////////////////////////////
 static int iterator_travel(int fd, struct ctdb_node *trav, char *key, int key_len, ctdb_traversal *traversal) {
-    if ((trav->prefix_len + key_len) < RTDB_MAX_KEY_LEN) {
-        char prefix_key[RTDB_MAX_KEY_LEN + 1] = {[0 ... RTDB_MAX_KEY_LEN] = 0};
+    if ((trav->prefix_len + key_len) < CTDB_MAX_KEY_LEN) {
+        char prefix_key[CTDB_MAX_KEY_LEN + 1] = {[0 ... CTDB_MAX_KEY_LEN] = 0};
         if (0 > sprintf(prefix_key, "%.*s%.*s", key_len, key, trav->prefix_len, trav->prefix)) goto over;
         int prefix_key_len = key_len + trav->prefix_len;
 
         if (0 < trav->leaf_pos) {
             struct ctdb_leaf leaf = {.value_len = 0, .value = NULL};
-            if (RTDB_OK != load_leaf(fd, trav->leaf_pos, &leaf)) goto over;
+            if (CTDB_OK != load_leaf(fd, trav->leaf_pos, &leaf)) goto over;
             if (0 < prefix_key_len && 0 < leaf.value_len) {                              //the data has not been deleted
-                if (RTDB_OK != traversal(prefix_key, prefix_key_len, &leaf)) goto over;  //the traversal operation has been cancelled
+                if (CTDB_OK != traversal(prefix_key, prefix_key_len, &leaf)) goto over;  //the traversal operation has been cancelled
             }
             free(leaf.value);
         }
@@ -510,37 +525,34 @@ static int iterator_travel(int fd, struct ctdb_node *trav, char *key, int key_le
         for (; items_index < trav->items_count; items_index++) {
             off_t sub_node_pos = trav->items[items_index].sub_node_pos;
             struct ctdb_node sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
-            if (RTDB_OK != load_node(fd, sub_node_pos, &sub_node)) goto over;
-            if (RTDB_OK != iterator_travel(fd, &sub_node, prefix_key, prefix_key_len, traversal)) goto over;  //something wrong, or the traversal operation has been cancelled
+            if (CTDB_OK != load_node(fd, sub_node_pos, &sub_node)) goto over;
+            if (CTDB_OK != iterator_travel(fd, &sub_node, prefix_key, prefix_key_len, traversal)) goto over;  //something wrong, or the traversal operation has been cancelled
         }
     }
-    return RTDB_OK;
+    return CTDB_OK;
 
 over:
-    return RTDB_ERR;
+    return CTDB_ERR;
 }
 
 int ctdb_iterator_travel(struct ctdb *db, char *key, int key_len, ctdb_traversal *traversal) {
-    if(RTDB_MAX_KEY_LEN < key_len) goto err;
+    if(CTDB_MAX_KEY_LEN < key_len) goto err;
 
     //search the prefix nodes related to key from the file
-    char filled_prefix_key[RTDB_MAX_KEY_LEN + 1] = {[0 ... RTDB_MAX_KEY_LEN] = 0};
+    char filled_prefix_key[CTDB_MAX_KEY_LEN + 1] = {[0 ... CTDB_MAX_KEY_LEN] = 0};
     if (filled_prefix_key != strncpy(filled_prefix_key, key, key_len)) goto err;
     off_t sub_node_pos = find_node(db->fd, db->footer.root_pos, filled_prefix_key, key_len, 0, 1);  //fuzzy match
     if (0 >= sub_node_pos) goto err;  //no data found
-    
-    //load node from the file
+
+    //load the starting node of traversal from the file
     struct ctdb_node sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
-    if (RTDB_OK == load_node(db->fd, sub_node_pos, &sub_node)){
-        int start_pos = 0;
-        for(; start_pos < sub_node.prefix_len; start_pos++){
-            if(filled_prefix_key[key_len - start_pos - 1] != sub_node.prefix[start_pos])
-                break;
-        }
-        return iterator_travel(db->fd, &sub_node, key, key_len - start_pos, traversal);
+    if (CTDB_OK == load_node(db->fd, sub_node_pos, &sub_node)){
+        //find the starting position of the sub_node.prefix in the "key", remove this part to avoid repeated splicing
+        int start_pos = prefix_start_at(filled_prefix_key, key_len, sub_node.prefix, sub_node.prefix_len);
+        if(0 > start_pos) goto err;
+        return iterator_travel(db->fd, &sub_node, filled_prefix_key, start_pos, traversal);
     }
 
 err:
-    return RTDB_ERR;
+    return CTDB_ERR;
 }
-
