@@ -15,30 +15,30 @@
  * SOFTWARE.
  */
 
-#ifndef __RTDB_H_
-#define __RTDB_H_
+#ifndef __CTDB_H_
+#define __CTDB_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define RTDB_HEADER_SIZE 128
-#define RTDB_MAGIC_STR "ctdb"
-#define RTDB_MAGIC_LEN 4
-#define RTDB_VERSION_NUM 1
+#define CTDB_HEADER_SIZE 128
+#define CTDB_MAGIC_STR "ctdb"
+#define CTDB_MAGIC_LEN 4
+#define CTDB_VERSION_NUM 1
 
-#define RTDB_MAX_KEY_LEN 64
-#define RTDB_MAX_CHAR_RANGE 256
-#define RTDB_MAX_VALUE_LEN (1024 * 1024 * 1024) //1G
+#define CTDB_MAX_KEY_LEN 64
+#define CTDB_MAX_CHAR_RANGE 256
+#define CTDB_MAX_VALUE_LEN (1024 * 1024 * 1024) //1G
 
-#define RTDB_ITEMS_SIZE (1 + 8)
-#define RTDB_NODE_SIZE (1 + RTDB_MAX_KEY_LEN + 8 + 1) //"items" not included!
-//#define RTDB_LEAF_SIZE (4) 
+#define CTDB_ITEMS_SIZE (1 + 8)
+#define CTDB_NODE_SIZE (1 + CTDB_MAX_KEY_LEN + 8 + 1) //"items" not included!
+//#define CTDB_LEAF_SIZE (4) 
 
-#define RTDB_FOOTER_ALIGNED_BASE (32)
-#define RTDB_FOOTER_SIZE (2 + 8 + 8 + 8 + 2)
+#define CTDB_FOOTER_ALIGNED_BASE (32)
+#define CTDB_FOOTER_SIZE (2 + 8 + 8 + 8 + 2)
 
-#define RTDB_OK 0
-#define RTDB_ERR -1
+#define CTDB_OK 0
+#define CTDB_ERR -1
 
 struct ctdb_footer{
     uint64_t tran_count;
@@ -53,14 +53,14 @@ struct ctdb{
 
 struct ctdb_node{
     uint8_t prefix_len;
-    char prefix[RTDB_MAX_KEY_LEN + 1];
+    char prefix[CTDB_MAX_KEY_LEN + 1];
     off_t leaf_pos;
     
     uint8_t items_count;
     struct ctdb_node_item{
         char sub_prefix_char;
         off_t sub_node_pos;
-    }items[RTDB_MAX_CHAR_RANGE];
+    }items[CTDB_MAX_CHAR_RANGE];
 };
 
 struct ctdb_leaf{
@@ -91,7 +91,6 @@ void ctdb_close(struct ctdb *db);
 
 //iterator
 typedef int ctdb_traversal(char *key, int key_len, struct ctdb_leaf *leaf);
-//int ctdb_iterator_travel(struct ctdb *db, ctdb_traversal *traversal);
 int ctdb_iterator_travel(struct ctdb *db, char *key, int key_len, ctdb_traversal *traversal);
 
 #ifdef __cplusplus
