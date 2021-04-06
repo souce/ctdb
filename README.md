@@ -51,6 +51,7 @@ struct ctdb *db = ctdb_open("./test.db");
 //traverse callback
 int traversal(char *key, int key_len, struct ctdb_leaf *leaf){
     printf("key:%.*s value:%.*s\n", key_len, key, leaf->value_len, leaf->value);
+    //return CTDB_ERR; //stop traversal
     return CTDB_OK; //continue
 }
 
