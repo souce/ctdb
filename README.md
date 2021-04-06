@@ -73,7 +73,6 @@ if(CTDB_OK == ctdb_iterator_travel(db, "", 0, traversal)){
     printf("end of traversal\n");
 }
 
-
 //traversing data starting with "app"
 if(CTDB_OK == ctdb_iterator_travel(db, "app", 3, traversal)){
     printf("end of traversal\n");
