@@ -45,7 +45,7 @@ ctdb_close(db);
 
 traverse:
 
-```
+```c
 struct ctdb *db = ctdb_open("./test.db");
 
 //traverse callback
