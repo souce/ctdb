@@ -1,6 +1,6 @@
 # ctdb
 
-ctdb is a simple key/value database, based on compressed trie.
+ctdb is a simple & lightweight key-value database, based on compressed trie.
 
 Storage is append-only, written datas are never changed.
 
