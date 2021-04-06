@@ -429,7 +429,7 @@ static off_t append_node(int fd, struct ctdb_node *trav, char *prefix, int prefi
         put_node_in_items(trav, new_node.prefix[0], new_node_pos);
         return dump_node(fd, trav);  //append the node to the end of file
     } else {
-        //duplicate prefix, replace
+        //duplicate prefix, replace (written datas are never changed)
         trav->leaf_pos = leaf_pos;
         return dump_node(fd, trav);  //append the node to the end of file
     }
@@ -453,7 +453,7 @@ int ctdb_put(struct ctdb_transaction *trans, char *key, int key_len, char *value
     off_t new_leaf_pos = dump_leaf(trans->db->fd, &new_leaf);
     if (0 >= new_leaf_pos) goto err;
 
-    //update the prefix nodes
+    //update the prefix nodes (append only)
     char filled_prefix_key[CTDB_MAX_KEY_LEN + 1] = {[0 ... CTDB_MAX_KEY_LEN] = 0};
     if (filled_prefix_key != strncpy(filled_prefix_key, key, key_len)) goto err;
     trans->new_footer.root_pos = append_node(trans->db->fd, &root, filled_prefix_key, key_len, 0, new_leaf_pos);
