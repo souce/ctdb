@@ -249,17 +249,14 @@ struct ctdb *ctdb_open(char *path) {
     return db;
 
 err:
-    if (NULL != db)
-        free(db);
-    if (0 <= fd)
-        close(fd);
+    if (NULL != db) free(db);
+    if (0 <= fd) close(fd);
     return NULL;
 }
 
 void ctdb_close(struct ctdb *db) {
     if (NULL == db) return;
-    if (0 <= db->fd)
-        close(db->fd);
+    if (0 <= db->fd) close(db->fd);
     free(db);
 }
 
