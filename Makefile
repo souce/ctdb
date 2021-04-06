@@ -1,17 +1,26 @@
 CC=gcc
 BIN = test
 BIN_PATH = ./
+EXAMPLE_PATH = ./example
 
 SRC_PATH = ./
 SRC_FILE = $(wildcard $(SRC_PATH)/*.c)
 SRC_OBJS = $(patsubst %.c,%.o,$(SRC_FILE))
 
-INC_PATH = -I$(SDS_PATH) -I$(SRC_PATH)
+INC_PATH = -I$(SRC_PATH)
 CFLAGS = -g -O0 -Wall $(INC_PATH)
 
-$(BIN): $(SRC_OBJS) 
-	$(CC) -o $(BIN_PATH)/$@ $(SDS_OBJS) $(SRC_OBJS) $(CFLAGS)
-	@echo "compile $(BIN) success!";
-
 clean:
-	$(RM) $(AE_PATH)/*.o $(SDS_PATH)/*.o $(PHR_PATH)/*.o $(INIH_PATH)/*.o $(COM_PATH)/*.o $(CO_PATH)/*.o $(SRC_PATH)/*.o $(BIN_PATH)/$(BIN)
+	$(RM) $(SRC_PATH)/*.o $(BIN_PATH)/simple $(BIN_PATH)/trans $(BIN_PATH)/iter
+
+simple: $(SRC_OBJS) 
+	$(CC) -o $(BIN_PATH)/$@ $(SRC_OBJS) $(EXAMPLE_PATH)/simple.c $(CFLAGS)
+	@echo "compile '$@' success!";
+
+trans: $(SRC_OBJS) 
+	$(CC) -o $(BIN_PATH)/$@ $(SRC_OBJS) $(EXAMPLE_PATH)/trans.c $(CFLAGS)
+	@echo "compile '$@' success!";
+
+iter: $(SRC_OBJS) 
+	$(CC) -o $(BIN_PATH)/$@ $(SRC_OBJS) $(EXAMPLE_PATH)/iter.c $(CFLAGS)
+	@echo "compile '$@' success!";
