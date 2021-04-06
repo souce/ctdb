@@ -4,13 +4,25 @@ ctdb is a simple key/value database, based on compressed trie.
 
 Storage is append-only, written datas are never changed.
 
-Supported operations:
+### Supported operations
 
  * Add a new key/value pair to the database.
  * Delete an existing key from the database.
  * Querying the database by a specific key.
  * Traverse the database by a specific prefix.
  * Support for transactions.
+
+### Quick start
+
+```
+make simple; ./simple
+
+make trans; ./trans
+
+make iter; ./iter
+```
+
+### example
 
 put & del:
 
