@@ -54,6 +54,12 @@ int traversal(char *key, int key_len, struct ctdb_leaf *leaf){
     return CTDB_OK; //continue
 }
 
+//traverse all the data
+if(CTDB_OK == ctdb_iterator_travel(db, "", 0, traversal)){
+    printf("end of traversal\n");
+}
+
+
 //traversing data starting with "app"
 if(CTDB_OK == ctdb_iterator_travel(db, "app", 3, traversal)){
     printf("end of traversal\n");
