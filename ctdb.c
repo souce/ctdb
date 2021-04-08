@@ -310,6 +310,7 @@ struct ctdb_leaf *ctdb_get(struct ctdb *db, char *key, int key_len) {
     if (0 >= sub_node_pos) goto err;  //no data found
     struct ctdb_node sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
     if (CTDB_OK != load_node(db->fd, sub_node_pos, &sub_node)) goto err;
+    if (0 >= sub_node.leaf_pos) goto err;
 
     leaf = calloc(1, sizeof(*leaf));
     if (NULL == leaf || CTDB_OK != load_leaf(db->fd, sub_node.leaf_pos, leaf)) goto err;
