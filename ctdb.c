@@ -78,7 +78,8 @@ static inline int load_footer(int fd, struct ctdb_footer *footer) {
             SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, cksum_4, int16_t)) {
             goto retry;
         }
-        if (0 < cksum_1 && cksum_1 == cksum_2 && cksum_2 == cksum_3 && cksum_3 == cksum_4) {  //check the mark, make sure the data is correct
+        if (file_size > footer_in_file.root_pos && 
+            0 < cksum_1 && cksum_1 == cksum_2 && cksum_2 == cksum_3 && cksum_3 == cksum_4) {  //check the mark, make sure the data is correct
             *footer = footer_in_file;
             return CTDB_OK;
         }
