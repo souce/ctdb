@@ -35,7 +35,7 @@ extern "C" {
 //#define CTDB_LEAF_SIZE (4) 
 
 #define CTDB_FOOTER_ALIGNED_BASE (32)
-#define CTDB_FOOTER_SIZE (2 + 8 + 2 + 8 + 2 + 8 + 2)
+#define CTDB_FOOTER_SIZE (8 + 8 + 8 + 8 + 8)
 
 #define CTDB_OK 0
 #define CTDB_ERR -1
