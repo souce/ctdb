@@ -64,22 +64,22 @@ static inline int load_footer(int fd, struct ctdb_footer *footer) {
     off_t file_size = lseek(fd, -CTDB_FOOTER_ALIGNED_BASE, SEEK_END);
     off_t flag_aligned_pos = FOOTER_ALIGNED(file_size);  //find the right place for the 'transaction flag'
     while (flag_aligned_pos > CTDB_HEADER_SIZE + CTDB_FOOTER_ALIGNED_BASE) {
-        int16_t cksum_1 = 1, cksum_2 = 2, cksum_3 = 3, cksum_4 = 4;
+        uint64_t cksum_1 = 1, cksum_2 = 2;
         char *buf = (char[CTDB_FOOTER_SIZE + 1]){[0 ... CTDB_FOOTER_SIZE] = 0}, *end = &(buf[CTDB_FOOTER_SIZE]);
         struct ctdb_footer footer_in_file = {.tran_count = 0, .del_count = 0, .root_pos = 0};
         if (-1 == lseek(fd, flag_aligned_pos, SEEK_SET)) goto retry;
         if (CTDB_FOOTER_SIZE != read(fd, buf, CTDB_FOOTER_SIZE)) goto retry;
-        if (SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, cksum_1, int16_t) ||
+        if (SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, cksum_1, uint64_t) ||
             SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, footer_in_file.tran_count, uint64_t) ||
-            SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, cksum_2, int16_t) ||
             SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, footer_in_file.del_count, uint64_t) ||
-            SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, cksum_3, int16_t) ||
             SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, footer_in_file.root_pos, uint64_t) ||
-            SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, cksum_4, int16_t)) {
+            SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, cksum_2, uint64_t)) {
             goto retry;
         }
-        if (file_size > footer_in_file.root_pos && 
-            0 < cksum_1 && cksum_1 == cksum_2 && cksum_2 == cksum_3 && cksum_3 == cksum_4) {  //check the mark, make sure the data is correct
+        //check the mark, make sure the data is correct (CheckSum)
+        if (0 < cksum_1 && cksum_1 == cksum_2 && 
+            file_size > footer_in_file.root_pos &&
+            0 == 1 + cksum_2 + (footer_in_file.tran_count + footer_in_file.del_count + footer_in_file.root_pos)) {
             *footer = footer_in_file;
             return CTDB_OK;
         }
@@ -91,17 +91,14 @@ static inline int load_footer(int fd, struct ctdb_footer *footer) {
     return CTDB_ERR;
 }
 
-#define RANDOM_CKSUM() ({ int16_t min = 1, max = INT16_MAX; rand() % (max - min + 1) + min; })
 static inline int dump_footer(int fd, struct ctdb_footer *footer) {
     char footer_buf[CTDB_FOOTER_SIZE + 1] = {[0 ... CTDB_FOOTER_SIZE] = 0}, *buf = footer_buf, *end = &(footer_buf[CTDB_FOOTER_SIZE]);
-    int16_t cksum = RANDOM_CKSUM();
-    if (SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, cksum, int16_t) ||
+    uint64_t cksum = ~(footer->tran_count + footer->del_count + footer->root_pos);  //CheckSum
+    if (SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, cksum, uint64_t) ||
         SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, footer->tran_count, uint64_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, cksum, int16_t) ||
         SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, footer->del_count, uint64_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, cksum, int16_t) ||
         SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, footer->root_pos, uint64_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, cksum, int16_t)) {
+        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, cksum, uint64_t)) {
         return CTDB_ERR;
     }
     off_t file_size = lseek(fd, 0, SEEK_END);
