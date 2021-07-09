@@ -355,7 +355,7 @@ static void put_node_in_items(struct ctdb_node *father_node, char sub_prefix_cha
 }
 
 static off_t append_node(int fd, struct ctdb_node *trav, char *prefix, int prefix_len, int prefix_pos, off_t leaf_pos) {
-    while (prefix_len > prefix_pos) {
+    while (prefix_len > prefix_pos) { //this is not a loop, just for the 'break'
         char prefix_char = prefix[prefix_pos];
         struct ctdb_node_item key_item = {.sub_prefix_char = prefix_char, .sub_node_pos = 0};
         struct ctdb_node_item *item = (struct ctdb_node_item *)bsearch(&key_item, trav->items, trav->items_count, sizeof(key_item), item_cmp);
