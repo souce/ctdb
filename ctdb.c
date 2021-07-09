@@ -429,7 +429,7 @@ static off_t append_node(int fd, struct ctdb_node *trav, char *prefix, int prefi
         }
     }  //end:while
     
-    if (prefix_pos < prefix_len) {
+    if (prefix_len > prefix_pos) {
         //initialize the new node, or the new prefix is longer than the old prefix
         struct ctdb_node new_node = {.prefix_len = 0, .leaf_pos = leaf_pos, .items_count = 0};
         if (CTDB_OK != prefix_copy(new_node.prefix, &new_node.prefix_len, prefix + prefix_pos, CTDB_MAX_KEY_LEN)) goto err;
