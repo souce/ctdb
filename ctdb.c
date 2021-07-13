@@ -461,7 +461,6 @@ int ctdb_put(struct ctdb_transaction *trans, char *key, uint8_t key_len, char *v
     trans->new_footer.tran_count += 1;
     if (0 >= value_len || NULL == value)
         trans->new_footer.del_count += 1;
-    
     return CTDB_OK;
 
 err:
