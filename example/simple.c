@@ -34,6 +34,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 // UTILS
 ///////////////////////////////////////////////////////////////////////////////
+static int random_range() __attribute__((unused));
 static int random_range(int min, int max){
     return rand() % (max - min + 1) + min;
 }
@@ -177,13 +178,11 @@ void stress_put_testing_single_transaction(int key_len, int count) {
     int i = 0;
     for(; i < count; i++){
         char *key = random_str(key_len);
-        //char *key = random_str_shortly(key_len);
-        //char *key = random_str_num(key_len);
         assert(CTDB_OK == ctdb_put(trans, key, key_len, key, key_len));
         free(key);
     }
     ctdb_transaction_commit(trans);
-    printf("stress_put_testing_single_transaction: count:%d, time consuming:%ldms  del_count:%ld tran_count:%ld\n", count, getCurrentTime() - start, db->footer.del_count, db->footer.tran_count);
+    printf("stress: %d pieces of data in 1 transaction, time consuming:%ldms del_count:%ld tran_count:%ld\n", count, getCurrentTime() - start, db->footer.del_count, db->footer.tran_count);
     ctdb_transaction_free(trans);
     ctdb_close(db);
 }
@@ -210,15 +209,9 @@ void stress_put_testing_multiple_transactions(int count) {
         assert(NULL != trans);
         assert(CTDB_OK == ctdb_transaction_commit(trans));
         ctdb_transaction_free(trans);
-
-        //struct ctdb_leaf *leaf = ctdb_get(db, key, key_len);
-        //assert(NULL != leaf);
-        //assert(key_len == leaf->value_len && 0 == strncmp(key, leaf->value, key_len));
-        //printf("%s %.*s\n", key, leaf->value_len, leaf->value);
-        //ctdb_leaf_free(leaf);
         free(key);
     }
-    printf("stress_put_testing_multiple_transactions: count:%d, time consuming:%ldms  del_count:%ld tran_count:%ld\n", count, getCurrentTime() - start, db->footer.del_count, db->footer.tran_count);
+    printf("stress: %d pieces of data in %d transactions, time consuming:%ldms del_count:%ld tran_count:%ld\n", count, count, getCurrentTime() - start, db->footer.del_count, db->footer.tran_count);
     ctdb_close(db);
 }
 
@@ -259,7 +252,7 @@ void stress_get_testing(int count) {
         assert(test_key_len == leaf->value_len && 0 == strncmp(test_key, leaf->value, test_key_len));
         ctdb_leaf_free(leaf);
     }
-    printf("stress_get_testing: count:%d, time consuming:%ldms  del_count:%ld tran_count:%ld\n", count, getCurrentTime() - start, db->footer.del_count, db->footer.tran_count);
+    printf("stress: %d pieces of data read operation, time consuming:%ldms del_count:%ld tran_count:%ld\n", count, getCurrentTime() - start, db->footer.del_count, db->footer.tran_count);
     ctdb_close(db);
 }
 
