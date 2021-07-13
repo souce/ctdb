@@ -282,7 +282,9 @@ static off_t find_node(int fd, off_t trav_pos, char *prefix, uint8_t prefix_len,
             return find_node(fd, item->sub_node_pos, prefix, prefix_len, key_prefix_pos, is_fuzzy, matched_prefix_len);
         }
         //fuzzy matching
-        if(is_fuzzy) return trav_pos;
+        if(is_fuzzy) {
+            return trav_pos;
+        }
         goto err;  //the current node's prefix does not match the key, stop searching
     }
 
