@@ -255,7 +255,9 @@ static off_t find_node(int fd, off_t trav_pos, char *prefix, uint8_t prefix_len,
         struct ctdb_node trav = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
         if (CTDB_OK != load_node(fd, trav_pos, &trav)) goto err;
 
-        if (NULL != matched_prefix_len) *matched_prefix_len = prefix_pos;
+        if (NULL != matched_prefix_len){
+            *matched_prefix_len = prefix_pos;
+        }
         
         //across the same prefix
         uint8_t key_prefix_pos = prefix_pos;
