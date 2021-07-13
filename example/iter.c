@@ -34,7 +34,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 // UTILS
 ///////////////////////////////////////////////////////////////////////////////
-static int random_range() __attribute__((unused));
+static int random_range(int min, int max) __attribute__((unused));
 static int random_range(int min, int max){
     return rand() % (max - min + 1) + min;
 }
