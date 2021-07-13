@@ -352,7 +352,7 @@ err:
     return CTDB_ERR;
 }
 
-static off_t append_node(int fd, struct ctdb_node *trav, char *prefix, uint8_t prefix_len, off_t prefix_pos, off_t leaf_pos) {
+static off_t append_node_to_file(int fd, struct ctdb_node *trav, char *prefix, uint8_t prefix_len, off_t prefix_pos, off_t leaf_pos) {
     while (prefix_len > prefix_pos) { //this is not a loop, just for the 'break'
         char prefix_char = prefix[prefix_pos];
         struct ctdb_node_item key_item = {.sub_prefix_char = prefix_char, .sub_node_pos = 0};
@@ -374,7 +374,7 @@ static off_t append_node(int fd, struct ctdb_node *trav, char *prefix, uint8_t p
 
         if (sub_node_prefix_pos == sub_node.prefix_len) {
             //continue to traverse to the next node of the tree
-            off_t new_node_pos = append_node(fd, &sub_node, prefix, prefix_len, key_prefix_pos, leaf_pos);
+            off_t new_node_pos = append_node_to_file(fd, &sub_node, prefix, prefix_len, key_prefix_pos, leaf_pos);
             if (CTDB_OK != put_node_into_items(trav, sub_node.prefix[0], new_node_pos)) goto err;
             return dump_node(fd, trav);  //append the node to the end of file
 
@@ -452,7 +452,7 @@ int ctdb_put(struct ctdb_transaction *trans, char *key, uint8_t key_len, char *v
     //update the prefix nodes (append only)
     char filled_prefix_key[CTDB_MAX_KEY_LEN + 1] = {[0 ... CTDB_MAX_KEY_LEN] = 0};
     if (filled_prefix_key != strncpy(filled_prefix_key, key, key_len)) goto err;
-    trans->new_footer.root_pos = append_node(trans->db->fd, &root, filled_prefix_key, key_len, 0, new_leaf_pos);
+    trans->new_footer.root_pos = append_node_to_file(trans->db->fd, &root, filled_prefix_key, key_len, 0, new_leaf_pos);
     if (0 >= trans->new_footer.root_pos) goto err;
 
     //cumulative the operation count
