@@ -249,7 +249,7 @@ void ctdb_close(struct ctdb *db) {
     free(db);
 }
 
-static off_t find_node(int fd, off_t trav_pos, char *prefix, uint8_t prefix_len, off_t prefix_pos, uint8_t is_fuzzy, uint8_t *matched_prefix_len) {
+static off_t find_node_from_file(int fd, off_t trav_pos, char *prefix, uint8_t prefix_len, off_t prefix_pos, uint8_t is_fuzzy, uint8_t *matched_prefix_len) {
     if(prefix_len == prefix_pos) return trav_pos;  //no need to match
     if(prefix_len > prefix_pos) {
         struct ctdb_node trav = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
@@ -279,7 +279,7 @@ static off_t find_node(int fd, off_t trav_pos, char *prefix, uint8_t prefix_len,
             struct ctdb_node_item key_item = {.sub_prefix_char = prefix_char, .sub_node_pos = 0};
             struct ctdb_node_item *item = (struct ctdb_node_item *)bsearch(&key_item, trav.items, trav.items_count, sizeof(key_item), item_cmp);
             if (NULL == item) goto err;  //the item not found in child nodes, stop searching
-            return find_node(fd, item->sub_node_pos, prefix, prefix_len, key_prefix_pos, is_fuzzy, matched_prefix_len);
+            return find_node_from_file(fd, item->sub_node_pos, prefix, prefix_len, key_prefix_pos, is_fuzzy, matched_prefix_len);
         }
         //fuzzy matching
         if(is_fuzzy) {
@@ -302,7 +302,7 @@ struct ctdb_leaf *ctdb_get(struct ctdb *db, char *key, uint8_t key_len) {
     if (filled_prefix_key != strncpy(filled_prefix_key, key, key_len)) goto err;
     
     //load node from the file
-    off_t sub_node_pos = find_node(db->fd, db->footer.root_pos, filled_prefix_key, key_len, 0, 0, NULL);  //not fuzzy match
+    off_t sub_node_pos = find_node_from_file(db->fd, db->footer.root_pos, filled_prefix_key, key_len, 0, 0, NULL);  //not fuzzy match
     if (0 >= sub_node_pos) goto err;  //no data found
     struct ctdb_node sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
     if (CTDB_OK != load_node(db->fd, sub_node_pos, &sub_node)) goto err;
@@ -540,7 +540,7 @@ int ctdb_iterator_travel(struct ctdb *db, char *key, uint8_t key_len, ctdb_trave
     char filled_prefix_key[CTDB_MAX_KEY_LEN + 1] = {[0 ... CTDB_MAX_KEY_LEN] = 0};
     if (filled_prefix_key != strncpy(filled_prefix_key, key, key_len)) goto err;
     uint8_t matched_prefix_len = 0;
-    off_t sub_node_pos = find_node(db->fd, db->footer.root_pos, filled_prefix_key, key_len, 0, 1, &matched_prefix_len);  //fuzzy match
+    off_t sub_node_pos = find_node_from_file(db->fd, db->footer.root_pos, filled_prefix_key, key_len, 0, 1, &matched_prefix_len);  //fuzzy match
     if (0 >= sub_node_pos) goto err;  //no data found
 
     //load the starting node of traversal from the file
