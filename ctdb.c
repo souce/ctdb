@@ -270,7 +270,9 @@ static off_t find_node(int fd, off_t trav_pos, char *prefix, uint8_t prefix_len,
         };
         
         if (trav_prefix_pos == trav.prefix_len) {
-            if(key_prefix_pos == prefix_len) return trav_pos;  //the trav_node prefix must match completely
+            if(key_prefix_pos == prefix_len) {
+                return trav_pos;  //the trav_node prefix must match completely
+            }
 
             //traverse to the next node of the tree
             char prefix_char = prefix[key_prefix_pos];
