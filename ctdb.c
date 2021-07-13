@@ -437,7 +437,7 @@ err:
 int ctdb_put(struct ctdb_transaction *trans, char *key, uint8_t key_len, char *value, uint32_t value_len) {
     if (NULL == trans || 1 != trans->is_isvalid) goto err;  //verify that the transaction has not been committed or rolled back
     if (0 >= key_len || CTDB_MAX_KEY_LEN < key_len || NULL == key) goto err;
-    if (0 > value_len || CTDB_MAX_VALUE_LEN < value_len || NULL == value) goto err;  //delete value (whether it exists or not)
+    if (CTDB_MAX_VALUE_LEN < value_len || NULL == value) goto err;  //if value_len is 0, that means delete (whether it exists or not)
 
     struct ctdb_node root = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
     if (0 < trans->new_footer.root_pos) {
