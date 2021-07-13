@@ -199,7 +199,6 @@ err:
 // COMMEN
 ///////////////////////////////////////////////////////////////////////////////
 static inline int prefix_copy(char *filled_prefix_dst, uint8_t *prefix_dst_len, char *filled_prefix_src, uint8_t max_len) {
-    //the prefix's length is "CTDB_MAX_KEY_LEN + 1", it's safe
     if (CTDB_MAX_KEY_LEN < max_len) goto err;
     if (filled_prefix_dst == strncpy(filled_prefix_dst, filled_prefix_src, max_len)) {
         if (NULL != prefix_dst_len) *prefix_dst_len = strnlen(filled_prefix_dst, CTDB_MAX_KEY_LEN);
@@ -208,18 +207,6 @@ static inline int prefix_copy(char *filled_prefix_dst, uint8_t *prefix_dst_len, 
 
 err:
     return CTDB_ERR;
-}
-
-static inline int prefix_start_at(char *filled_prefix, uint8_t filled_prefix_len, char *node_prefix, uint8_t node_prefix_len) {
-    if(CTDB_MAX_KEY_LEN < filled_prefix_len || CTDB_MAX_KEY_LEN < node_prefix_len) goto err;
-    int readn = 0;
-    char diff_format[CTDB_MAX_KEY_LEN + 10];
-    if(0 >= snprintf(diff_format, CTDB_MAX_KEY_LEN + 10, "%%*[^%.*s]%%n", node_prefix_len, node_prefix)) goto err;
-    sscanf(filled_prefix, diff_format, &readn);
-    return readn;
-
-err:
-    return -1;
 }
 
 static int item_cmp(const void *a, const void *b) {
@@ -262,35 +249,36 @@ void ctdb_close(struct ctdb *db) {
     free(db);
 }
 
-static off_t find_node(int fd, off_t trav_pos, char *prefix, int prefix_len, int prefix_pos, int is_fuzzy) {
+static off_t find_node(int fd, off_t trav_pos, char *prefix, uint8_t prefix_len, off_t prefix_pos, uint8_t is_fuzzy, uint8_t *matched_prefix_len) {
     if(prefix_len == prefix_pos) return trav_pos;  //no need to match
     if(prefix_len > prefix_pos) {
         struct ctdb_node trav = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
         if (CTDB_OK != load_node(fd, trav_pos, &trav)) goto err;
 
+        if (NULL != matched_prefix_len) *matched_prefix_len = prefix_pos;
+        
         //across the same prefix
-        int key_prefix_pos = prefix_pos;
-        int trav_prefix_pos = 0;
+        uint8_t key_prefix_pos = prefix_pos;
+        uint8_t trav_prefix_pos = 0;
         while (trav_prefix_pos < trav.prefix_len && 
                 key_prefix_pos < prefix_len && 
                 prefix[key_prefix_pos] == trav.prefix[trav_prefix_pos]) {
             ++key_prefix_pos;
             ++trav_prefix_pos;
         };
-
-        //fuzzy matching
-        if(is_fuzzy && key_prefix_pos == prefix_len) return trav_pos;
         
         if (trav_prefix_pos == trav.prefix_len) {
             if(key_prefix_pos == prefix_len) return trav_pos;  //the trav_node prefix must match completely
-            
+
+            //traverse to the next node of the tree
             char prefix_char = prefix[key_prefix_pos];
             struct ctdb_node_item key_item = {.sub_prefix_char = prefix_char, .sub_node_pos = 0};
             struct ctdb_node_item *item = (struct ctdb_node_item *)bsearch(&key_item, trav.items, trav.items_count, sizeof(key_item), item_cmp);
             if (NULL == item) goto err;  //the item not found in child nodes, stop searching
-            //continue to traverse to the next node of the tree
-            return find_node(fd, item->sub_node_pos, prefix, prefix_len, key_prefix_pos, is_fuzzy);
+            return find_node(fd, item->sub_node_pos, prefix, prefix_len, key_prefix_pos, is_fuzzy, matched_prefix_len);
         }
+        //fuzzy matching
+        if(is_fuzzy) return trav_pos;
         goto err;  //the current node's prefix does not match the key, stop searching
     }
 
@@ -298,7 +286,7 @@ err:
     return 0;
 }
 
-struct ctdb_leaf *ctdb_get(struct ctdb *db, char *key, int key_len) {
+struct ctdb_leaf *ctdb_get(struct ctdb *db, char *key, uint8_t key_len) {
     struct ctdb_leaf *leaf = NULL;
     if (0 >= key_len || CTDB_MAX_KEY_LEN < key_len || NULL == key) goto err;
     if (0 >= db->footer.root_pos) goto err;
@@ -308,7 +296,7 @@ struct ctdb_leaf *ctdb_get(struct ctdb *db, char *key, int key_len) {
     if (filled_prefix_key != strncpy(filled_prefix_key, key, key_len)) goto err;
     
     //load node from the file
-    off_t sub_node_pos = find_node(db->fd, db->footer.root_pos, filled_prefix_key, key_len, 0, 0);  //not fuzzy match
+    off_t sub_node_pos = find_node(db->fd, db->footer.root_pos, filled_prefix_key, key_len, 0, 0, NULL);  //not fuzzy match
     if (0 >= sub_node_pos) goto err;  //no data found
     struct ctdb_node sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
     if (CTDB_OK != load_node(db->fd, sub_node_pos, &sub_node)) goto err;
@@ -343,7 +331,7 @@ struct ctdb_transaction *ctdb_transaction_begin(struct ctdb *db) {
     return trans;
 }
 
-static int put_node_in_items(struct ctdb_node *father_node, char sub_prefix_char, int sub_node_pos) {
+static int put_node_into_items(struct ctdb_node *father_node, char sub_prefix_char, off_t sub_node_pos) {
     if (0 >= sub_node_pos) goto err;
     struct ctdb_node_item new_item = {.sub_prefix_char = sub_prefix_char, .sub_node_pos = sub_node_pos};
     struct ctdb_node_item *exists_item = (struct ctdb_node_item *)bsearch(&new_item, father_node->items, father_node->items_count, sizeof(new_item), item_cmp);
@@ -360,7 +348,7 @@ err:
     return CTDB_ERR;
 }
 
-static off_t append_node(int fd, struct ctdb_node *trav, char *prefix, int prefix_len, int prefix_pos, off_t leaf_pos) {
+static off_t append_node(int fd, struct ctdb_node *trav, char *prefix, uint8_t prefix_len, off_t prefix_pos, off_t leaf_pos) {
     while (prefix_len > prefix_pos) { //this is not a loop, just for the 'break'
         char prefix_char = prefix[prefix_pos];
         struct ctdb_node_item key_item = {.sub_prefix_char = prefix_char, .sub_node_pos = 0};
@@ -372,8 +360,8 @@ static off_t append_node(int fd, struct ctdb_node *trav, char *prefix, int prefi
         if (CTDB_OK != load_node(fd, item->sub_node_pos, &sub_node)) goto err;
 
         //across the same prefix
-        int key_prefix_pos = prefix_pos;
-        int sub_node_prefix_pos = 0;
+        uint8_t key_prefix_pos = prefix_pos;
+        uint8_t sub_node_prefix_pos = 0;
         while (sub_node_prefix_pos < sub_node.prefix_len && key_prefix_pos < prefix_len && 
                 prefix[key_prefix_pos] == sub_node.prefix[sub_node_prefix_pos]) {
             ++key_prefix_pos;
@@ -383,7 +371,7 @@ static off_t append_node(int fd, struct ctdb_node *trav, char *prefix, int prefi
         if (sub_node_prefix_pos == sub_node.prefix_len) {
             //continue to traverse to the next node of the tree
             off_t new_node_pos = append_node(fd, &sub_node, prefix, prefix_len, key_prefix_pos, leaf_pos);
-            if (CTDB_OK != put_node_in_items(trav, sub_node.prefix[0], new_node_pos)) goto err;
+            if (CTDB_OK != put_node_into_items(trav, sub_node.prefix[0], new_node_pos)) goto err;
             return dump_node(fd, trav);  //append the node to the end of file
 
         } else {
@@ -398,10 +386,10 @@ static off_t append_node(int fd, struct ctdb_node *trav, char *prefix, int prefi
                 //the old node as a child of the new node
                 struct ctdb_node new_node = {.prefix_len = 0, .leaf_pos = leaf_pos, .items_count = 0};
                 if (CTDB_OK != prefix_copy(new_node.prefix, &new_node.prefix_len, prefix + prefix_pos, CTDB_MAX_KEY_LEN)) goto err;
-                if (CTDB_OK != put_node_in_items(&new_node, sub_node.prefix[0], dump_node(fd, &sub_node))) goto err;
+                if (CTDB_OK != put_node_into_items(&new_node, sub_node.prefix[0], dump_node(fd, &sub_node))) goto err;
 
                 //the new node as a child of the trav node
-                if (CTDB_OK != put_node_in_items(trav, new_node.prefix[0], dump_node(fd, &new_node))) goto err;
+                if (CTDB_OK != put_node_into_items(trav, new_node.prefix[0], dump_node(fd, &new_node))) goto err;
                 return dump_node(fd, trav);  //append the node to the end of file
 
             } else {
@@ -411,15 +399,15 @@ static off_t append_node(int fd, struct ctdb_node *trav, char *prefix, int prefi
 
                 //the old node as a child of the common node
                 if (CTDB_OK != prefix_copy(sub_node.prefix, &sub_node.prefix_len, old_remained, CTDB_MAX_KEY_LEN)) goto err;
-                if (CTDB_OK != put_node_in_items(&common_node, sub_node.prefix[0], dump_node(fd, &sub_node))) goto err;
+                if (CTDB_OK != put_node_into_items(&common_node, sub_node.prefix[0], dump_node(fd, &sub_node))) goto err;
 
                 //the new node as a child of the common node
                 struct ctdb_node new_node = {.prefix_len = 0, .leaf_pos = leaf_pos, .items_count = 0};
                 if (CTDB_OK != prefix_copy(new_node.prefix, &new_node.prefix_len, new_remained, CTDB_MAX_KEY_LEN)) goto err;
-                if (CTDB_OK != put_node_in_items(&common_node, new_node.prefix[0], dump_node(fd, &new_node))) goto err;
+                if (CTDB_OK != put_node_into_items(&common_node, new_node.prefix[0], dump_node(fd, &new_node))) goto err;
 
                 //the common node as a child of the trav node
-                if (CTDB_OK != put_node_in_items(trav, common_node.prefix[0], dump_node(fd, &common_node))) goto err;
+                if (CTDB_OK != put_node_into_items(trav, common_node.prefix[0], dump_node(fd, &common_node))) goto err;
                 return dump_node(fd, trav);  //append the node to the end of file
             }
         }
@@ -429,7 +417,7 @@ static off_t append_node(int fd, struct ctdb_node *trav, char *prefix, int prefi
         //initialize the new node, or the new prefix is longer than the old prefix
         struct ctdb_node new_node = {.prefix_len = 0, .leaf_pos = leaf_pos, .items_count = 0};
         if (CTDB_OK != prefix_copy(new_node.prefix, &new_node.prefix_len, prefix + prefix_pos, CTDB_MAX_KEY_LEN)) goto err;
-        if (CTDB_OK != put_node_in_items(trav, new_node.prefix[0], dump_node(fd, &new_node))) goto err;
+        if (CTDB_OK != put_node_into_items(trav, new_node.prefix[0], dump_node(fd, &new_node))) goto err;
         return dump_node(fd, trav);  //append the node to the end of file
         
     } else {
@@ -442,7 +430,7 @@ err:
     return 0;
 }
 
-int ctdb_put(struct ctdb_transaction *trans, char *key, int key_len, char *value, int value_len) {
+int ctdb_put(struct ctdb_transaction *trans, char *key, uint8_t key_len, char *value, uint32_t value_len) {
     if (NULL == trans || 1 != trans->is_isvalid) goto err;  //verify that the transaction has not been committed or rolled back
     if (0 >= key_len || CTDB_MAX_KEY_LEN < key_len || NULL == key) goto err;
     if (0 > value_len || CTDB_MAX_VALUE_LEN < value_len || NULL == value) goto err;  //delete value (whether it exists or not)
@@ -474,7 +462,7 @@ err:
     return CTDB_ERR;
 }
 
-int ctdb_del(struct ctdb_transaction *trans, char *key, int key_len) {
+int ctdb_del(struct ctdb_transaction *trans, char *key, uint8_t key_len) {
     return ctdb_put(trans, key, key_len, "", 0);
 }
 
@@ -508,11 +496,11 @@ void ctdb_transaction_free(struct ctdb_transaction *trans){
 ///////////////////////////////////////////////////////////////////////////////
 // iterator
 ///////////////////////////////////////////////////////////////////////////////
-static int iterator_travel(int fd, struct ctdb_node *trav, char *key, int key_len, ctdb_traversal *traversal) {
+static int iterator_travel(int fd, struct ctdb_node *trav, char *key, uint8_t key_len, ctdb_traversal *traversal) {
     if ((trav->prefix_len + key_len) < CTDB_MAX_KEY_LEN) {
         char prefix_key[CTDB_MAX_KEY_LEN + 1] = {[0 ... CTDB_MAX_KEY_LEN] = 0};
         if (0 > sprintf(prefix_key, "%.*s%.*s", key_len, key, trav->prefix_len, trav->prefix)) goto over;
-        int prefix_key_len = key_len + trav->prefix_len;
+        uint8_t prefix_key_len = key_len + trav->prefix_len;
 
         if (0 < trav->leaf_pos) {
             struct ctdb_leaf leaf = {.value_len = 0, .value = NULL};
@@ -528,7 +516,9 @@ static int iterator_travel(int fd, struct ctdb_node *trav, char *key, int key_le
             off_t sub_node_pos = trav->items[items_index].sub_node_pos;
             struct ctdb_node sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
             if (CTDB_OK != load_node(fd, sub_node_pos, &sub_node)) goto over;
-            if (CTDB_OK != iterator_travel(fd, &sub_node, prefix_key, prefix_key_len, traversal)) goto over;  //something wrong, or the traversal operation has been cancelled
+            if (CTDB_OK != iterator_travel(fd, &sub_node, prefix_key, prefix_key_len, traversal)){
+                goto over; //something wrong, or the traversal operation has been cancelled
+            }
         }
     }
     return CTDB_OK;
@@ -537,22 +527,20 @@ over:
     return CTDB_ERR;
 }
 
-int ctdb_iterator_travel(struct ctdb *db, char *key, int key_len, ctdb_traversal *traversal) {
+int ctdb_iterator_travel(struct ctdb *db, char *key, uint8_t key_len, ctdb_traversal *traversal) {
     if(CTDB_MAX_KEY_LEN < key_len) goto err;
 
     //search the prefix nodes related to key from the file
     char filled_prefix_key[CTDB_MAX_KEY_LEN + 1] = {[0 ... CTDB_MAX_KEY_LEN] = 0};
     if (filled_prefix_key != strncpy(filled_prefix_key, key, key_len)) goto err;
-    off_t sub_node_pos = find_node(db->fd, db->footer.root_pos, filled_prefix_key, key_len, 0, 1);  //fuzzy match
+    uint8_t matched_prefix_len = 0;
+    off_t sub_node_pos = find_node(db->fd, db->footer.root_pos, filled_prefix_key, key_len, 0, 1, &matched_prefix_len);  //fuzzy match
     if (0 >= sub_node_pos) goto err;  //no data found
 
     //load the starting node of traversal from the file
     struct ctdb_node sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
     if (CTDB_OK == load_node(db->fd, sub_node_pos, &sub_node)){
-        //find the starting position of the sub_node.prefix in the "key", remove this part to avoid repeated splicing
-        int start_pos = prefix_start_at(filled_prefix_key, key_len, sub_node.prefix, sub_node.prefix_len);
-        if(0 > start_pos) goto err;
-        return iterator_travel(db->fd, &sub_node, filled_prefix_key, start_pos, traversal);
+        return iterator_travel(db->fd, &sub_node, filled_prefix_key, matched_prefix_len, traversal);
     }
 
 err:
