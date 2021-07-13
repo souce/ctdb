@@ -34,6 +34,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 // UTILS
 ///////////////////////////////////////////////////////////////////////////////
+static int random_range() __attribute__((unused));
 static int random_range(int min, int max){
     return rand() % (max - min + 1) + min;
 }
@@ -89,15 +90,14 @@ static char *random_str_num(int len) {
 ///////////////////////////////////////////////////////////////////////////////
 int g_iter_count = 0;
 #if defined(__APPLE__)
-    int traversal(char *key, int key_len, struct ctdb_leaf *leaf){
+    int traversal(char *key, uint8_t key_len, struct ctdb_leaf *leaf){
         g_iter_count += 1;
         printf("key:%.*s value:%.*s\n", key_len, key, leaf->value_len, leaf->value);
         assert(key_len == leaf->value_len && 0 == strncmp(key, leaf->value, key_len));
         return CTDB_OK; //continue
     }
 #endif
-void test_iter() __attribute__((unused));
-void test_iter(int count, char *prefix, int prefix_len) {
+void test_iter(int count, char *prefix, uint8_t prefix_len) {
     int key_len = 32;
     char *path = "./test.db";
     struct ctdb *db = ctdb_open(path);
@@ -105,16 +105,15 @@ void test_iter(int count, char *prefix, int prefix_len) {
     
     struct ctdb_transaction *trans = ctdb_transaction_begin(db);
     assert(NULL != trans);
+
+    assert(CTDB_OK == ctdb_put(trans, "apple", 5, "apple", 5));
+    assert(CTDB_OK == ctdb_put(trans, "app", 3, "app", 3));
+    assert(CTDB_OK == ctdb_put(trans, "application", 11, "application", 11));
+
     int i = 0;
     for(; i < count; i++){
         char *key = random_str_shortly(key_len);
         assert(CTDB_OK == ctdb_put(trans, key, key_len, key, key_len));
-
-        // struct ctdb_leaf *leaf = ctdb_get(db, key, key_len);
-        // assert(NULL != leaf);
-        // assert(key_len == leaf->value_len && 0 == strncmp(key, leaf->value, key_len));
-        // //printf("%s %.*s\n", key, leaf->value_len, leaf->value);
-        // ctdb_leaf_free(leaf);
         free(key);
     }
 
@@ -123,17 +122,17 @@ void test_iter(int count, char *prefix, int prefix_len) {
    
 #if defined(__APPLE__)
     if(CTDB_OK == ctdb_iterator_travel(db, prefix, prefix_len, traversal)){
-        printf("iterator sucess, prefix:'%s' count:%d iter_count:%d\n", prefix, count, g_iter_count);
+        printf("iterator sucess, prefix:'%s' count:%ld iter_count:%d\n", prefix, db->footer.tran_count, g_iter_count);
     }
 #else
-    int traversal(char *key, int key_len, struct ctdb_leaf *leaf){
+    int traversal(char *key, uint8_t key_len, struct ctdb_leaf *leaf){
         g_iter_count += 1;
         printf("key:%.*s value:%.*s\n", key_len, key, leaf->value_len, leaf->value);
         assert(key_len == leaf->value_len && 0 == strncmp(key, leaf->value, key_len));
         return CTDB_OK; //continue
     }
     if(CTDB_OK == ctdb_iterator_travel(db, prefix, prefix_len, traversal)){
-        printf("iterator sucess, prefix:'%s' count:%d iter_count:%d\n", prefix, count, g_iter_count);
+        printf("iterator sucess, prefix:'%s' count:%ld iter_count:%d\n", prefix, db->footer.tran_count, g_iter_count);
     }
 #endif
     ctdb_close(db);
@@ -141,10 +140,10 @@ void test_iter(int count, char *prefix, int prefix_len) {
 
 int main(){
     srand(time(NULL));
-
+    
     test_iter(100, "", 0);  //traverse all data
     g_iter_count = 0;
-    test_iter(50000, "a1", 2);  //traverse the specified data
+    test_iter(50, "ap", 2);  //traverse the specified data
 
     printf("over\n");
     return 0;
