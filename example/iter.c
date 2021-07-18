@@ -1,3 +1,20 @@
+/*
+ * 
+ * Copyright (c) 2021, Joel
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -102,7 +119,8 @@ void test_iter(int count, char *prefix, uint8_t prefix_len) {
 
     assert(CTDB_OK == ctdb_transaction_commit(trans));
     ctdb_transaction_free(trans);
-   
+    
+    g_iter_count = 0;
 #if defined(__APPLE__)
     if(CTDB_OK == ctdb_iterator_travel(db, prefix, prefix_len, traversal)){
         printf("iterator sucess, prefix:'%s' count:%llu iter_count:%d\n", prefix, db->footer.tran_count, g_iter_count);
@@ -125,7 +143,6 @@ int main(){
     srand(time(NULL));
     
     test_iter(100, "", 0);  //traverse all data
-    g_iter_count = 0;
     test_iter(50, "ap", 2);  //traverse the specified data
 
     printf("over\n");
