@@ -122,7 +122,7 @@ void test_iter(int count, char *prefix, uint8_t prefix_len) {
    
 #if defined(__APPLE__)
     if(CTDB_OK == ctdb_iterator_travel(db, prefix, prefix_len, traversal)){
-        printf("iterator sucess, prefix:'%s' count:%ld iter_count:%d\n", prefix, db->footer.tran_count, g_iter_count);
+        printf("iterator sucess, prefix:'%s' count:%llu iter_count:%d\n", prefix, db->footer.tran_count, g_iter_count);
     }
 #else
     int traversal(char *key, uint8_t key_len, struct ctdb_leaf *leaf){
@@ -132,7 +132,7 @@ void test_iter(int count, char *prefix, uint8_t prefix_len) {
         return CTDB_OK; //continue
     }
     if(CTDB_OK == ctdb_iterator_travel(db, prefix, prefix_len, traversal)){
-        printf("iterator sucess, prefix:'%s' count:%ld iter_count:%d\n", prefix, db->footer.tran_count, g_iter_count);
+        printf("iterator sucess, prefix:'%s' count:%llu iter_count:%d\n", prefix, db->footer.tran_count, g_iter_count);
     }
 #endif
     ctdb_close(db);
