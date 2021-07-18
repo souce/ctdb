@@ -1,20 +1,3 @@
-/*
- * 
- * Copyright (c) 2021, Joel
- *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -126,7 +109,7 @@ void simple_test() {
     db = ctdb_open(path);
     assert(NULL != db);
 
-    printf("after put: del_count:%lu tran_count:%lu\n", db->footer.del_count, db->footer.tran_count);
+    printf("after put: del_count:%llu tran_count:%llu\n", db->footer.del_count, db->footer.tran_count);
     struct ctdb_leaf *leaf = ctdb_get(db, "app", 3);
     assert(NULL != leaf);
     printf("app: %.*s\n", leaf->value_len, leaf->value);
@@ -159,7 +142,7 @@ void simple_test() {
     
     leaf = ctdb_get(db, "xxx", 3);
     assert(NULL == leaf);
-    printf("after del: del_count:%lu tran_count:%lu\n", db->footer.del_count, db->footer.tran_count);
+    printf("after del: del_count:%llu tran_count:%llu\n", db->footer.del_count, db->footer.tran_count);
 
     ctdb_close(db);
 }
@@ -182,7 +165,7 @@ void stress_put_testing_single_transaction(int key_len, int count) {
         free(key);
     }
     ctdb_transaction_commit(trans);
-    printf("stress: %d pieces of data in 1 transaction, time consuming:%ldms del_count:%ld tran_count:%ld\n", count, getCurrentTime() - start, db->footer.del_count, db->footer.tran_count);
+    printf("stress: %d pieces of data in 1 transaction, time consuming:%lldms del_count:%llu tran_count:%llu\n", count, getCurrentTime() - start, db->footer.del_count, db->footer.tran_count);
     ctdb_transaction_free(trans);
     ctdb_close(db);
 }
@@ -211,7 +194,7 @@ void stress_put_testing_multiple_transactions(int count) {
         ctdb_transaction_free(trans);
         free(key);
     }
-    printf("stress: %d pieces of data in %d transactions, time consuming:%ldms del_count:%ld tran_count:%ld\n", count, count, getCurrentTime() - start, db->footer.del_count, db->footer.tran_count);
+    printf("stress: %d pieces of data in %d transactions, time consuming:%lldms del_count:%llu tran_count:%llu\n", count, count, getCurrentTime() - start, db->footer.del_count, db->footer.tran_count);
     ctdb_close(db);
 }
 
@@ -252,7 +235,7 @@ void stress_get_testing(int count) {
         assert(test_key_len == leaf->value_len && 0 == strncmp(test_key, leaf->value, test_key_len));
         ctdb_leaf_free(leaf);
     }
-    printf("stress: %d pieces of data read operation, time consuming:%ldms del_count:%ld tran_count:%ld\n", count, getCurrentTime() - start, db->footer.del_count, db->footer.tran_count);
+    printf("stress: %d pieces of data read operation, time consuming:%lldms del_count:%llu tran_count:%llu\n", count, getCurrentTime() - start, db->footer.del_count, db->footer.tran_count);
     ctdb_close(db);
 }
 
