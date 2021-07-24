@@ -21,6 +21,10 @@
 extern "C" {
 #endif
 
+#define CTDB_CHAR_LEN 1
+#define CTDB_I32_LEN 4
+#define CTDB_I64_LEN 8
+
 #define CTDB_HEADER_SIZE 128
 #define CTDB_MAGIC_STR "ctdb"
 #define CTDB_MAGIC_LEN 4
@@ -28,14 +32,16 @@ extern "C" {
 
 #define CTDB_MAX_KEY_LEN 64
 #define CTDB_MAX_CHAR_RANGE 256
+
 #define CTDB_MAX_VALUE_LEN (1024 * 1024 * 1024) //1G
 
-#define CTDB_ITEMS_SIZE (1 + 8)
-#define CTDB_NODE_SIZE (1 + CTDB_MAX_KEY_LEN + 8 + 1) //"items" not included!
-//#define CTDB_LEAF_SIZE (4) 
+#define CTDB_ITEMS_SIZE (CTDB_CHAR_LEN + CTDB_I64_LEN) //sub_prefix_char, sub_node_pos
+#define CTDB_NODE_SIZE (CTDB_CHAR_LEN + CTDB_MAX_KEY_LEN + CTDB_I64_LEN + CTDB_CHAR_LEN) //prefix_len, prefix, leaf_pos, items_count
+
+#define CTDB_LEAF_SIZE (CTDB_I32_LEN + CTDB_I64_LEN) //value_len, value_pos
 
 #define CTDB_FOOTER_ALIGNED_BASE (32)
-#define CTDB_FOOTER_SIZE (8 + 8 + 8 + 8 + 8)
+#define CTDB_FOOTER_SIZE (CTDB_I64_LEN * 5) //cksum_1, tran_count, del_count, root_pos, cksum_2
 
 #define CTDB_OK 0
 #define CTDB_ERR -1
@@ -43,7 +49,7 @@ extern "C" {
 struct ctdb_footer{
     uint64_t tran_count;
     uint64_t del_count;
-    off_t root_pos;
+    int64_t root_pos;
 };
 
 struct ctdb{
@@ -54,12 +60,12 @@ struct ctdb{
 struct ctdb_node{
     uint8_t prefix_len;
     char prefix[CTDB_MAX_KEY_LEN + 1];
-    off_t leaf_pos;
+    int64_t leaf_pos;
     
     uint8_t items_count;
     struct ctdb_node_item{
         char sub_prefix_char;
-        off_t sub_node_pos;
+        int64_t sub_node_pos;
     }items[CTDB_MAX_CHAR_RANGE];
 };
 
@@ -68,7 +74,7 @@ struct ctdb_leaf{
     //int expire;
     //int fingerprint;
     uint32_t value_len;
-    char *value;
+    int64_t value_pos;
 };
 
 struct ctdb_transaction{
@@ -79,8 +85,7 @@ struct ctdb_transaction{
 
 //API
 struct ctdb *ctdb_open(char *path);
-struct ctdb_leaf *ctdb_get(struct ctdb *db, char *key, uint8_t key_len);
-void ctdb_leaf_free(struct ctdb_leaf *leaf);
+struct ctdb_leaf ctdb_get(struct ctdb *db, char *key, uint8_t key_len);
 struct ctdb_transaction *ctdb_transaction_begin(struct ctdb *db);
 int ctdb_put(struct ctdb_transaction *trans, char *key, uint8_t key_len, char *value, uint32_t value_len);
 int ctdb_del(struct ctdb_transaction *trans, char *key, uint8_t key_len);
@@ -90,7 +95,7 @@ void ctdb_transaction_free(struct ctdb_transaction *trans);
 void ctdb_close(struct ctdb *db);
 
 //iterator
-typedef int ctdb_traversal(char *key, uint8_t key_len, struct ctdb_leaf *leaf);
+typedef int ctdb_traversal(int fd, char *key, uint8_t key_len, struct ctdb_leaf leaf);
 int ctdb_iterator_travel(struct ctdb *db, char *key, uint8_t key_len, ctdb_traversal *traversal);
 
 #ifdef __cplusplus
