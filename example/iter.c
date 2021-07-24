@@ -85,15 +85,34 @@ static char *random_str_num(int len) {
     return string;
 }
 
+static char *read_value_from_file(int fd, uint32_t value_len, off_t value_pos) __attribute__((unused));
+static char *read_value_from_file(int fd, uint32_t value_len, off_t value_pos) {
+    char *value = calloc(1, value_len);
+    if (NULL == value) goto err;
+    if (-1 == lseek(fd, value_pos, SEEK_SET)) goto err;
+    if (value_len != read(fd, value, value_len)) goto err;
+    return value;
+
+err:
+    if (NULL != value) free(value);
+    return NULL;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // TESTING
 ///////////////////////////////////////////////////////////////////////////////
 int g_iter_count = 0;
 #if defined(__APPLE__)
-    int traversal(char *key, uint8_t key_len, struct ctdb_leaf *leaf){
+    int traversal(int fd, char *key, uint8_t key_len, struct ctdb_leaf leaf){
         g_iter_count += 1;
-        printf("key:%.*s value:%.*s\n", key_len, key, leaf->value_len, leaf->value);
-        assert(key_len == leaf->value_len && 0 == strncmp(key, leaf->value, key_len));
+
+        assert(0 < leaf.value_len);
+        char *value = read_value_from_file(fd, leaf.value_len, leaf.value_pos);
+        assert(NULL != value);
+        printf("key:%.*s value:%.*s\n", key_len, key, leaf.value_len, value);
+        assert(key_len == leaf.value_len && 0 == strncmp(key, value, key_len));
+        free(value);
+
         return CTDB_OK; //continue
     }
 #endif
@@ -126,10 +145,16 @@ void test_iter(int count, char *prefix, uint8_t prefix_len) {
         printf("iterator sucess, prefix:'%s' count:%llu iter_count:%d\n", prefix, db->footer.tran_count, g_iter_count);
     }
 #else
-    int traversal(char *key, uint8_t key_len, struct ctdb_leaf *leaf){
+    int traversal(int fd, char *key, uint8_t key_len, struct ctdb_leaf leaf){
         g_iter_count += 1;
-        printf("key:%.*s value:%.*s\n", key_len, key, leaf->value_len, leaf->value);
-        assert(key_len == leaf->value_len && 0 == strncmp(key, leaf->value, key_len));
+
+        assert(0 < leaf.value_len);
+        char *value = read_value_from_file(fd, leaf.value_len, leaf.value_pos);
+        assert(NULL != value);
+        printf("key:%.*s value:%.*s\n", key_len, key, leaf.value_len, value);
+        assert(key_len == leaf.value_len && 0 == strncmp(key, value, key_len));
+        free(value);
+        
         return CTDB_OK; //continue
     }
     if(CTDB_OK == ctdb_iterator_travel(db, prefix, prefix_len, traversal)){
