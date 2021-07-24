@@ -37,7 +37,6 @@ extern "C" {
         #define swap_64 bswap_64
     #endif
 #elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__ /* already network-endian, do nothing */
-#define DEFINE_NUM_SWAP(T) \
     #define swap_16
     #define swap_32
     #define swap_64
