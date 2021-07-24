@@ -166,9 +166,8 @@ static int64_t dump_node(int fd, struct ctdb_node *node) {
         SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, node->items_count, uint8_t)) {
         goto err;
     }
-    
     int64_t node_pos = append_to_end(fd, node_buf, CTDB_NODE_SIZE);
-    if (-1 == node_pos) goto err;
+    if (0 >= node_pos) goto err;
     if (CTDB_OK != dump_items(fd, node->items_count, node->items)) goto err;
     return node_pos;
 
@@ -193,9 +192,8 @@ static int64_t dump_leaf(int fd, struct ctdb_leaf *leaf) {
         SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, leaf->value_pos, int64_t)) {
         goto err;
     }
-    
     int64_t leaf_pos = append_to_end(fd, leaf_buf, CTDB_LEAF_SIZE);
-    if (-1 == leaf_pos) goto err;
+    if (0 >= leaf_pos) goto err;
     return leaf_pos;
 
 err:
