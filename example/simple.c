@@ -85,6 +85,19 @@ static char *random_str_num(int len) {
     return string;
 }
 
+static char *read_value_from_file(int fd, uint32_t value_len, off_t value_pos) __attribute__((unused));
+static char *read_value_from_file(int fd, uint32_t value_len, off_t value_pos) {
+    char *value = calloc(1, value_len);
+    if (NULL == value) goto err;
+    if (-1 == lseek(fd, value_pos, SEEK_SET)) goto err;
+    if (value_len != read(fd, value, value_len)) goto err;
+    return value;
+
+err:
+    if (NULL != value) free(value);
+    return NULL;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // TESTING
 ///////////////////////////////////////////////////////////////////////////////
@@ -127,25 +140,33 @@ void simple_test() {
     assert(NULL != db);
 
     printf("after put: del_count:%llu tran_count:%llu\n", db->footer.del_count, db->footer.tran_count);
-    struct ctdb_leaf *leaf = ctdb_get(db, "app", 3);
-    assert(NULL != leaf);
-    printf("app: %.*s\n", leaf->value_len, leaf->value);
-    ctdb_leaf_free(leaf);
+    struct ctdb_leaf leaf = ctdb_get(db, "app", 3);
+    assert(0 < leaf.value_len);
+    char *value = read_value_from_file(db->fd, leaf.value_len, leaf.value_pos);
+    assert(NULL != value);
+    printf("app: %.*s\n", leaf.value_len, value);
+    free(value);
 
     leaf = ctdb_get(db, "apple", 5);
-    assert(NULL != leaf);
-    printf("apple: %.*s\n", leaf->value_len, leaf->value);
-    ctdb_leaf_free(leaf);
+    assert(0 < leaf.value_len);
+    value = read_value_from_file(db->fd, leaf.value_len, leaf.value_pos);
+    assert(NULL != value);
+    printf("apple: %.*s\n", leaf.value_len, value);
+    free(value);
     
     leaf = ctdb_get(db, "application", 11);
-    assert(NULL != leaf);
-    printf("application: %.*s\n", leaf->value_len, leaf->value);
-    ctdb_leaf_free(leaf);
+    assert(0 < leaf.value_len);
+    value = read_value_from_file(db->fd, leaf.value_len, leaf.value_pos);
+    assert(NULL != value);
+    printf("application: %.*s\n", leaf.value_len, value);
+    free(value);
 
     leaf = ctdb_get(db, "xxx", 3);
-    assert(NULL != leaf);
-    printf("xxx: %.*s\n", leaf->value_len, leaf->value);
-    ctdb_leaf_free(leaf);
+    assert(0 < leaf.value_len);
+    value = read_value_from_file(db->fd, leaf.value_len, leaf.value_pos);
+    assert(NULL != value);
+    printf("xxx: %.*s\n", leaf.value_len, value);
+    free(value);
 
     printf("-----------------------\n");
 
@@ -158,7 +179,7 @@ void simple_test() {
     ctdb_transaction_free(trans);
     
     leaf = ctdb_get(db, "xxx", 3);
-    assert(NULL == leaf);
+    assert(0 == leaf.value_len);
     printf("after del: del_count:%llu tran_count:%llu\n", db->footer.del_count, db->footer.tran_count);
 
     ctdb_close(db);
@@ -247,10 +268,12 @@ void stress_get_testing(int count) {
     int64_t start = getCurrentTime();
     i = 0;
     for(; i < count; i++){
-        struct ctdb_leaf *leaf = ctdb_get(db, test_key, test_key_len);
-        assert(NULL != leaf);
-        assert(test_key_len == leaf->value_len && 0 == strncmp(test_key, leaf->value, test_key_len));
-        ctdb_leaf_free(leaf);
+        struct ctdb_leaf leaf = ctdb_get(db, test_key, test_key_len);
+        assert(0 < leaf.value_len);
+        char *value = read_value_from_file(db->fd, leaf.value_len, leaf.value_pos);
+        assert(NULL != value);
+        assert(test_key_len == leaf.value_len && 0 == strncmp(test_key, value, test_key_len));
+        free(value);
     }
     printf("stress: %d pieces of data read operation, time consuming:%lldms del_count:%llu tran_count:%llu\n", count, getCurrentTime() - start, db->footer.del_count, db->footer.tran_count);
     ctdb_close(db);
