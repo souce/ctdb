@@ -46,8 +46,9 @@ get:
 ```c
 struct ctdb *db = ctdb_open("./test.db");
 
-struct ctdb_leaf *leaf = ctdb_get(db, "app", 3);
-printf("app: %.*s\n", leaf->value_len, leaf->value);
+struct ctdb_leaf leaf = ctdb_get(db, "app", 3);
+//seek(db->fd, leaf.value_pos, SEEK_SET)
+//read(db->fd, value_buf, leaf.value_len)) or sendfile(client_fd, db->fd, &off, leaf.value_len)
 ctdb_leaf_free(leaf);
 
 ctdb_close(db);
@@ -59,9 +60,8 @@ traverse:
 struct ctdb *db = ctdb_open("./test.db");
 
 //traverse callback
-int traversal(char *key, int key_len, struct ctdb_leaf *leaf){
-    printf("key:%.*s value:%.*s\n", key_len, key, leaf->value_len, leaf->value);
-    //do not free leaf!!!
+int traversal(char *key, int key_len, struct ctdb_leaf leaf){
+    printf("key:%.*s value_len:%u\n", key_len, key, leaf->value_len);
     //return CTDB_ERR; //stop traversal
     return CTDB_OK; //continue
 }
