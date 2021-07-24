@@ -24,7 +24,7 @@ extern "C" {
 #include <stdlib.h>
 
 #define swap_8 /* do nothing */
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ /* swap to network-endian */
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__ /* swap to little-endian */
     #if defined(__APPLE__)
         #include <libkern/OSByteOrder.h>
         #define swap_16 OSSwapInt16
@@ -36,7 +36,7 @@ extern "C" {
         #define swap_32 bswap_32
         #define swap_64 bswap_64
     #endif
-#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__ /* already network-endian, do nothing */
+#elif __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ /* already little-endian, do nothing */
     #define swap_16
     #define swap_32
     #define swap_64
