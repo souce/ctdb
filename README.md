@@ -48,7 +48,7 @@ struct ctdb *db = ctdb_open("./test.db");
 
 struct ctdb_leaf leaf = ctdb_get(db, "app", 3);
 //seek(db->fd, leaf.value_pos, SEEK_SET)
-//read(db->fd, value_buf, leaf.value_len)) or sendfile(client_fd, db->fd, &off, leaf.value_len)
+//read(db->fd, buffer, leaf.value_len)) or sendfile(client_fd, db->fd, &off, leaf.value_len)
 
 ctdb_close(db);
 ```
