@@ -144,7 +144,7 @@ DEFINE_NUM_PREPROCESSING(double)
 #define SERIALIZER_BUF_READ_BYTES(buf,end,res,len) \
     ({ \
         char *start = (buf); \
-        if((end + 1 - buf) >= len && NULL != (buf) && 0 < (len)){ \
+        if(NULL != (buf) && 0 < (len) && (end + 1 - buf) >= (len)){ \
             memcpy((res), (buf), (len)); \
             (buf) += (len); \
         } \
@@ -154,7 +154,7 @@ DEFINE_NUM_PREPROCESSING(double)
 #define SERIALIZER_BUF_WRITE_BYTES(buf,end,val,len) \
     ({ \
         char *start = (buf); \
-        if((end + 1 - buf) >= len && NULL != (buf) && 0 < (len)){ \
+        if(NULL != (buf) && 0 < (len) && (end + 1 - buf) >= (len)){ \
             memcpy((buf), (val), (len)); \
             (buf) += (len); \
         } \
@@ -164,7 +164,7 @@ DEFINE_NUM_PREPROCESSING(double)
 #define SERIALIZER_BUF_SKIP_BYTES(buf,end,len) \
     ({ \
         char *start = (buf); \
-        if((end + 1 - buf) >= len && NULL != (buf) && 0 < (len)){ \
+        if(NULL != (buf) && 0 < (len) && (end + 1 - buf) >= (len)){ \
             (buf) += (len); \
         } \
         (len) == ((buf) - start) ? SERIALIZER_OK : SERIALIZER_ERR; \
