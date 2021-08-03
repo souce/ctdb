@@ -35,11 +35,12 @@
 static int check_header(int fd) {
     char magic_str[CTDB_MAGIC_LEN + 1] = {[0 ... CTDB_MAGIC_LEN] = 0};
     int version_num = -1;
-    char header_buf[CTDB_HEADER_SIZE + 1] = {[0 ... CTDB_HEADER_SIZE] = 0}, *buf = header_buf, *end = &(header_buf[CTDB_HEADER_SIZE]);
+    char header_buf[CTDB_HEADER_SIZE + 1] = {[0 ... CTDB_HEADER_SIZE] = 0};
+    char *buf_cur = header_buf, *buf_end = header_buf + CTDB_HEADER_SIZE;
     if (-1 == lseek(fd, 0, SEEK_SET)) return CTDB_ERR;  //get back to the beginning
     if (CTDB_HEADER_SIZE != read(fd, header_buf, CTDB_HEADER_SIZE)) return CTDB_ERR;
-    if (SERIALIZER_OK != SERIALIZER_BUF_READ_STR(buf, end, magic_str, CTDB_MAGIC_LEN) ||
-        SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, version_num, uint32_t)) {
+    if (SERIALIZER_OK != SERIALIZER_BUF_READ_STR(buf_cur, buf_end, magic_str, CTDB_MAGIC_LEN) ||
+        SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, version_num, uint32_t)) {
         return CTDB_ERR;
     }
     if (0 == strncmp(magic_str, CTDB_MAGIC_STR, CTDB_MAGIC_LEN) && CTDB_VERSION_NUM == version_num)
@@ -48,9 +49,10 @@ static int check_header(int fd) {
 }
 
 static int dump_header(int fd) {
-    char header_buf[CTDB_HEADER_SIZE + 1] = {[0 ... CTDB_HEADER_SIZE] = 0}, *buf = header_buf, *end = &(header_buf[CTDB_HEADER_SIZE]);
-    if (SERIALIZER_OK != SERIALIZER_BUF_WRITE_STR(buf, end, CTDB_MAGIC_STR, CTDB_MAGIC_LEN) ||
-        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, CTDB_VERSION_NUM, uint32_t)) {
+    char header_buf[CTDB_HEADER_SIZE + 1] = {[0 ... CTDB_HEADER_SIZE] = 0};
+    char *buf_cur = header_buf, *buf_end = header_buf + CTDB_HEADER_SIZE;
+    if (SERIALIZER_OK != SERIALIZER_BUF_WRITE_STR(buf_cur, buf_end, CTDB_MAGIC_STR, CTDB_MAGIC_LEN) ||
+        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, CTDB_VERSION_NUM, uint32_t)) {
         return CTDB_ERR;
     }
     if (-1 == lseek(fd, 0, SEEK_SET)) return CTDB_ERR;  //get back to the beginning
@@ -65,15 +67,16 @@ static int load_footer(int fd, struct ctdb_footer *footer) {
     int64_t flag_aligned_pos = FOOTER_ALIGNED(file_size);  //find the right place for the 'transaction flag'
     while (flag_aligned_pos > CTDB_HEADER_SIZE + CTDB_FOOTER_ALIGNED_BASE) {
         uint64_t cksum_1 = 1, cksum_2 = 2;
-        char *buf = (char[CTDB_FOOTER_SIZE + 1]){[0 ... CTDB_FOOTER_SIZE] = 0}, *end = &(buf[CTDB_FOOTER_SIZE]);
         struct ctdb_footer footer_in_file = {.tran_count = 0, .del_count = 0, .root_pos = 0};
+        char footer_buf[CTDB_FOOTER_SIZE + 1] = {[0 ... CTDB_FOOTER_SIZE] = 0};
+        char *buf_cur = footer_buf, *buf_end = footer_buf + CTDB_FOOTER_SIZE;
         if (-1 == lseek(fd, flag_aligned_pos, SEEK_SET)) goto retry;
-        if (CTDB_FOOTER_SIZE != read(fd, buf, CTDB_FOOTER_SIZE)) goto retry;
-        if (SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, cksum_1, uint64_t) ||
-            SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, footer_in_file.tran_count, uint64_t) ||
-            SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, footer_in_file.del_count, uint64_t) ||
-            SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, footer_in_file.root_pos, int64_t) ||
-            SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, cksum_2, uint64_t)) {
+        if (CTDB_FOOTER_SIZE != read(fd, footer_buf, CTDB_FOOTER_SIZE)) goto retry;
+        if (SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, cksum_1, uint64_t) ||
+            SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, footer_in_file.tran_count, uint64_t) ||
+            SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, footer_in_file.del_count, uint64_t) ||
+            SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, footer_in_file.root_pos, int64_t) ||
+            SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, cksum_2, uint64_t)) {
             goto retry;
         }
         //check the mark, make sure the data is correct (CheckSum)
@@ -92,13 +95,14 @@ static int load_footer(int fd, struct ctdb_footer *footer) {
 }
 
 static int dump_footer(int fd, struct ctdb_footer *footer) {
-    char footer_buf[CTDB_FOOTER_SIZE + 1] = {[0 ... CTDB_FOOTER_SIZE] = 0}, *buf = footer_buf, *end = &(footer_buf[CTDB_FOOTER_SIZE]);
+    char footer_buf[CTDB_FOOTER_SIZE + 1] = {[0 ... CTDB_FOOTER_SIZE] = 0};
+    char *buf_cur = footer_buf, *buf_end = footer_buf + CTDB_FOOTER_SIZE;
     uint64_t cksum = ~(footer->tran_count + footer->del_count + footer->root_pos);  //CheckSum
-    if (SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, cksum, uint64_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, footer->tran_count, uint64_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, footer->del_count, uint64_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, footer->root_pos, int64_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, cksum, uint64_t)) {
+    if (SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, cksum, uint64_t) ||
+        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, footer->tran_count, uint64_t) ||
+        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, footer->del_count, uint64_t) ||
+        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, footer->root_pos, int64_t) ||
+        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, cksum, uint64_t)) {
         return CTDB_ERR;
     }
     int64_t file_size = lseek(fd, 0, SEEK_END);
@@ -120,25 +124,27 @@ err:
 
 static inline int load_items(int fd, int items_count, struct ctdb_node_item *items) {
     int item_size = items_count * CTDB_ITEMS_SIZE;
-    char item_buf[item_size], *buf = item_buf, *end = &(item_buf[item_size - 1]);
+    char item_buf[item_size + 1];
+    char *buf_cur = item_buf, *buf_end = item_buf + item_size;
     if (item_size != read(fd, item_buf, item_size)) return CTDB_ERR;
     int i = 0;
     for (; i < items_count; i++) {
-        if (SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, items[i].sub_prefix_char, uint8_t) ||
-            SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, items[i].sub_node_pos, int64_t)) {
+        if (SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, items[i].sub_prefix_char, uint8_t) ||
+            SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, items[i].sub_node_pos, int64_t)) {
             return CTDB_ERR;
         }
     }
     return CTDB_OK;
 }
 static int load_node(int fd, int64_t node_pos, struct ctdb_node *node) {
-    char *buf = (char[CTDB_NODE_SIZE + 1]){[0 ... CTDB_NODE_SIZE] = 0}, *end = &(buf[CTDB_NODE_SIZE]);
+    char node_buf[CTDB_NODE_SIZE + 1] = {[0 ... CTDB_NODE_SIZE] = 0};
+    char *buf_cur = node_buf, *buf_end = node_buf + CTDB_NODE_SIZE;
     if (-1 == lseek(fd, node_pos, SEEK_SET)) return CTDB_ERR;
-    if (CTDB_NODE_SIZE != read(fd, buf, CTDB_NODE_SIZE)) return CTDB_ERR;
-    if (SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, node->prefix_len, uint8_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_READ_STR(buf, end, node->prefix, CTDB_MAX_KEY_LEN) ||
-        SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, node->leaf_pos, int64_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, node->items_count, uint8_t)) {
+    if (CTDB_NODE_SIZE != read(fd, node_buf, CTDB_NODE_SIZE)) return CTDB_ERR;
+    if (SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, node->prefix_len, uint8_t) ||
+        SERIALIZER_OK != SERIALIZER_BUF_READ_STR(buf_cur, buf_end, node->prefix, CTDB_MAX_KEY_LEN) ||
+        SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, node->leaf_pos, int64_t) ||
+        SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, node->items_count, uint8_t)) {
         return CTDB_ERR;
     }
     if (CTDB_OK != load_items(fd, node->items_count, node->items)) return CTDB_ERR;
@@ -147,11 +153,12 @@ static int load_node(int fd, int64_t node_pos, struct ctdb_node *node) {
 
 static inline int dump_items(int fd, int items_count, struct ctdb_node_item *items) {
     int item_size = items_count * CTDB_ITEMS_SIZE;
-    char item_buf[item_size], *buf = item_buf, *end = &(item_buf[item_size - 1]);
+    char item_buf[item_size + 1];
+    char *buf_cur = item_buf, *buf_end = item_buf + item_size;
     int i = 0;
     for (; i < items_count; i++) {
-        if (SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, items[i].sub_prefix_char, uint8_t) ||
-            SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, items[i].sub_node_pos, int64_t)) {
+        if (SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, items[i].sub_prefix_char, uint8_t) ||
+            SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, items[i].sub_node_pos, int64_t)) {
             return CTDB_ERR;
         }
     }
@@ -159,11 +166,12 @@ static inline int dump_items(int fd, int items_count, struct ctdb_node_item *ite
     return CTDB_OK;
 }
 static int64_t dump_node(int fd, struct ctdb_node *node) {
-    char node_buf[CTDB_NODE_SIZE + 1] = {[0 ... CTDB_NODE_SIZE] = 0}, *buf = node_buf, *end = &(node_buf[CTDB_NODE_SIZE]);
-    if (SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, node->prefix_len, uint8_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_WRITE_STR(buf, end, node->prefix, CTDB_MAX_KEY_LEN) ||
-        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, node->leaf_pos, int64_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, node->items_count, uint8_t)) {
+    char node_buf[CTDB_NODE_SIZE + 1] = {[0 ... CTDB_NODE_SIZE] = 0};
+    char *buf_cur = node_buf, *buf_end = node_buf + CTDB_NODE_SIZE;
+    if (SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, node->prefix_len, uint8_t) ||
+        SERIALIZER_OK != SERIALIZER_BUF_WRITE_STR(buf_cur, buf_end, node->prefix, CTDB_MAX_KEY_LEN) ||
+        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, node->leaf_pos, int64_t) ||
+        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, node->items_count, uint8_t)) {
         goto err;
     }
     int64_t node_pos = append_to_end(fd, node_buf, CTDB_NODE_SIZE);
@@ -176,20 +184,22 @@ err:
 }
 
 static int load_leaf(int fd, int64_t leaf_pos, struct ctdb_leaf *leaf) {
-    char leaf_buf[CTDB_LEAF_SIZE + 1] = {[0 ... CTDB_LEAF_SIZE] = 0}, *buf = leaf_buf, *end = &(leaf_buf[CTDB_LEAF_SIZE]);
+    char leaf_buf[CTDB_LEAF_SIZE + 1] = {[0 ... CTDB_LEAF_SIZE] = 0};
+    char *buf_cur = leaf_buf, *buf_end = leaf_buf + CTDB_LEAF_SIZE;
     if (-1 == lseek(fd, leaf_pos, SEEK_SET)) return CTDB_ERR;
     if (CTDB_LEAF_SIZE != read(fd, leaf_buf, CTDB_LEAF_SIZE)) return CTDB_ERR;
-    if (SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, leaf->value_len, uint32_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf, end, leaf->value_pos, int64_t)) {
+    if (SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, leaf->value_len, uint32_t) ||
+        SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, leaf->value_pos, int64_t)) {
         return CTDB_ERR;
     }
     return CTDB_OK;
 }
 
 static int64_t dump_leaf(int fd, struct ctdb_leaf *leaf) {
-    char leaf_buf[CTDB_LEAF_SIZE + 1] = {[0 ... CTDB_LEAF_SIZE] = 0}, *buf = leaf_buf, *end = &(leaf_buf[CTDB_LEAF_SIZE]);
-    if (SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, leaf->value_len, uint32_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf, end, leaf->value_pos, int64_t)) {
+    char leaf_buf[CTDB_LEAF_SIZE + 1] = {[0 ... CTDB_LEAF_SIZE] = 0};
+    char *buf_cur = leaf_buf, *buf_end = leaf_buf + CTDB_LEAF_SIZE;
+    if (SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, leaf->value_len, uint32_t) ||
+        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, leaf->value_pos, int64_t)) {
         goto err;
     }
     int64_t leaf_pos = append_to_end(fd, leaf_buf, CTDB_LEAF_SIZE);
