@@ -229,41 +229,6 @@ static int item_cmp(const void *a, const void *b) {
     return i->sub_prefix_char - j->sub_prefix_char;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// API
-///////////////////////////////////////////////////////////////////////////////
-struct ctdb *ctdb_open(char *path) {
-    struct ctdb *db = NULL;
-    int fd = -1;
-
-    db = calloc(1, sizeof(*db));
-    if (NULL == db) goto err;
-
-    if (-1 == access(path, F_OK)) {
-        fd = open(path, O_RDWR | O_CREAT, 0777);
-        if (0 > fd) goto err;
-        if (SERIALIZER_OK != dump_header(fd)) goto err;
-    } else {
-        fd = open(path, O_RDWR);
-        if (0 > fd) goto err;
-        if (SERIALIZER_OK != check_header(fd)) goto err;
-        load_footer(fd, &(db->footer));  //try to find the last successful transaction, the old data will not be covered
-    }
-    db->fd = fd;
-    return db;
-
-err:
-    if (NULL != db) free(db);
-    if (0 <= fd) close(fd);
-    return NULL;
-}
-
-void ctdb_close(struct ctdb *db) {
-    if (NULL == db) return;
-    if (0 <= db->fd) close(db->fd);
-    free(db);
-}
-
 static int64_t find_node_from_file(int fd, int64_t trav_pos, char *prefix, uint8_t prefix_len, uint8_t prefix_pos, uint8_t is_fuzzy, uint8_t *matched_prefix_len) {
     if(prefix_len == prefix_pos) return trav_pos;  //no need to match
     if(prefix_len > prefix_pos) {
@@ -305,41 +270,6 @@ static int64_t find_node_from_file(int fd, int64_t trav_pos, char *prefix, uint8
 
 err:
     return -1;
-}
-
-struct ctdb_leaf ctdb_get(struct ctdb *db, char *key, uint8_t key_len) {
-    struct ctdb_leaf leaf = { .value_len = 0, .value_pos = -1 };
-    if (0 >= key_len || CTDB_MAX_KEY_LEN < key_len || NULL == key) goto err;
-    if (0 >= db->footer.root_pos) goto err;
-
-    //search the prefix nodes related to key from the file
-    char filled_prefix_key[CTDB_MAX_KEY_LEN + 1] = {[0 ... CTDB_MAX_KEY_LEN] = 0};
-    if (filled_prefix_key != strncpy(filled_prefix_key, key, key_len)) goto err;
-    
-    //load node from the file
-    int64_t sub_node_pos = find_node_from_file(db->fd, db->footer.root_pos, filled_prefix_key, key_len, 0, 0, NULL);  //not fuzzy match
-    if (0 >= sub_node_pos) goto err;  //no data found
-    struct ctdb_node sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
-    if (CTDB_OK != load_node(db->fd, sub_node_pos, &sub_node)) goto err;
-    if (0 >= sub_node.leaf_pos) goto err;
-
-    if (CTDB_OK != load_leaf(db->fd, sub_node.leaf_pos, &leaf)) goto err;
-    if (0 == leaf.value_len) goto err;  //the data has been deleted
-    return leaf;
-
-err:
-    leaf = (struct ctdb_leaf){ .value_len = 0, .value_pos = -1 };
-    return leaf;
-}
-
-struct ctdb_transaction *ctdb_transaction_begin(struct ctdb *db) {
-    struct ctdb_transaction *trans = calloc(1, sizeof(*trans));
-    if (NULL != trans) {
-        trans->is_isvalid = 1;
-        trans->db = db;
-        trans->new_footer = db->footer;
-    }
-    return trans;
 }
 
 static int put_node_into_items(struct ctdb_node *father_node, char sub_prefix_char, int64_t sub_node_pos) {
@@ -439,6 +369,76 @@ static int64_t append_node_to_file(int fd, struct ctdb_node *trav, char *prefix,
 
 err:
     return -1;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// API
+///////////////////////////////////////////////////////////////////////////////
+struct ctdb *ctdb_open(char *path) {
+    struct ctdb *db = NULL;
+    int fd = -1;
+
+    db = calloc(1, sizeof(*db));
+    if (NULL == db) goto err;
+
+    if (-1 == access(path, F_OK)) {
+        fd = open(path, O_RDWR | O_CREAT, 0777);
+        if (0 > fd) goto err;
+        if (SERIALIZER_OK != dump_header(fd)) goto err;
+    } else {
+        fd = open(path, O_RDWR);
+        if (0 > fd) goto err;
+        if (SERIALIZER_OK != check_header(fd)) goto err;
+        load_footer(fd, &(db->footer));  //try to find the last successful transaction, the old data will not be covered
+    }
+    db->fd = fd;
+    return db;
+
+err:
+    if (NULL != db) free(db);
+    if (0 <= fd) close(fd);
+    return NULL;
+}
+
+void ctdb_close(struct ctdb *db) {
+    if (NULL == db) return;
+    if (0 <= db->fd) close(db->fd);
+    free(db);
+}
+
+struct ctdb_leaf ctdb_get(struct ctdb *db, char *key, uint8_t key_len) {
+    struct ctdb_leaf leaf = { .value_len = 0, .value_pos = -1 };
+    if (0 >= key_len || CTDB_MAX_KEY_LEN < key_len || NULL == key) goto err;
+    if (0 >= db->footer.root_pos) goto err;
+
+    //search the prefix nodes related to key from the file
+    char filled_prefix_key[CTDB_MAX_KEY_LEN + 1] = {[0 ... CTDB_MAX_KEY_LEN] = 0};
+    if (filled_prefix_key != strncpy(filled_prefix_key, key, key_len)) goto err;
+    
+    //load node from the file
+    int64_t sub_node_pos = find_node_from_file(db->fd, db->footer.root_pos, filled_prefix_key, key_len, 0, 0, NULL);  //not fuzzy match
+    if (0 >= sub_node_pos) goto err;  //no data found
+    struct ctdb_node sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
+    if (CTDB_OK != load_node(db->fd, sub_node_pos, &sub_node)) goto err;
+    if (0 >= sub_node.leaf_pos) goto err;
+
+    if (CTDB_OK != load_leaf(db->fd, sub_node.leaf_pos, &leaf)) goto err;
+    if (0 == leaf.value_len) goto err;  //the data has been deleted
+    return leaf;
+
+err:
+    leaf = (struct ctdb_leaf){ .value_len = 0, .value_pos = -1 };
+    return leaf;
+}
+
+struct ctdb_transaction *ctdb_transaction_begin(struct ctdb *db) {
+    struct ctdb_transaction *trans = calloc(1, sizeof(*trans));
+    if (NULL != trans) {
+        trans->is_isvalid = 1;
+        trans->db = db;
+        trans->new_footer = db->footer;
+    }
+    return trans;
 }
 
 int ctdb_put(struct ctdb_transaction *trans, char *key, uint8_t key_len, char *value, uint32_t value_len) {
