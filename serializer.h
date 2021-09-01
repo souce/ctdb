@@ -44,9 +44,9 @@ extern "C" {
     #error unknow endian
 #endif
 
-#define DEFINE_NUM_PREPROCESSING(T) \
-    static T preprocessing_##T(T value)__attribute__((unused)); \
-    static T preprocessing_##T(T value){ \
+#define DEFINE_NUM_SWAPPING(T) \
+    static T swapping_##T(T value)__attribute__((unused)); \
+    static T swapping_##T(T value){ \
         T res = 0; \
         switch ( sizeof(T) ) { \
             case 1: *(uint8_t*)&res = swap_8(*(uint8_t*)&value); break; \
@@ -57,16 +57,16 @@ extern "C" {
         } \
         return res; \
     }
-DEFINE_NUM_PREPROCESSING(int8_t)
-DEFINE_NUM_PREPROCESSING(uint8_t)
-DEFINE_NUM_PREPROCESSING(int16_t)
-DEFINE_NUM_PREPROCESSING(uint16_t)
-DEFINE_NUM_PREPROCESSING(int32_t)
-DEFINE_NUM_PREPROCESSING(uint32_t)
-DEFINE_NUM_PREPROCESSING(int64_t)
-DEFINE_NUM_PREPROCESSING(uint64_t)
-DEFINE_NUM_PREPROCESSING(float)
-DEFINE_NUM_PREPROCESSING(double)
+DEFINE_NUM_SWAPPING(int8_t)
+DEFINE_NUM_SWAPPING(uint8_t)
+DEFINE_NUM_SWAPPING(int16_t)
+DEFINE_NUM_SWAPPING(uint16_t)
+DEFINE_NUM_SWAPPING(int32_t)
+DEFINE_NUM_SWAPPING(uint32_t)
+DEFINE_NUM_SWAPPING(int64_t)
+DEFINE_NUM_SWAPPING(uint64_t)
+DEFINE_NUM_SWAPPING(float)
+DEFINE_NUM_SWAPPING(double)
 
 #define SERIALIZER_OK 0
 #define SERIALIZER_ERR -1
@@ -93,7 +93,7 @@ DEFINE_NUM_PREPROCESSING(double)
         if(0 <= (fd)){ \
             opr = SERIALIZER_IO_READ_BYTES((fd), &val, sizeof(type)); \
             if(SERIALIZER_OK == opr){ \
-                (res) = preprocessing_##type(val); \
+                (res) = swapping_##type(val); \
             } \
         } \
         opr; \
@@ -102,7 +102,7 @@ DEFINE_NUM_PREPROCESSING(double)
 #define SERIALIZER_IO_WRITE_NUM(fd,val,type) \
     ({ \
         int opr = SERIALIZER_ERR; \
-        type v = preprocessing_##type((type)(val)); \
+        type v = swapping_##type((type)(val)); \
         if(0 <= (fd)){ \
             opr = SERIALIZER_IO_WRITE_BYTES((fd), &v, sizeof(type)); \
         } \
@@ -175,14 +175,14 @@ DEFINE_NUM_PREPROCESSING(double)
         type val_tmp; \
         int opr = SERIALIZER_BUF_READ_BYTES((buf), (end), &val_tmp, sizeof(type)); \
         if(SERIALIZER_OK == opr){ \
-            (res) = preprocessing_##type(val_tmp); \
+            (res) = swapping_##type(val_tmp); \
         } \
         opr; \
     })
 
 #define SERIALIZER_BUF_WRITE_NUM(buf,end,val,type) \
     ({ \
-        type val_tmp = preprocessing_##type((type)(val)); \
+        type val_tmp = swapping_##type((type)(val)); \
         SERIALIZER_BUF_WRITE_BYTES((buf), (end), &val_tmp, sizeof(type)); \
     })
 
