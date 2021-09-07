@@ -49,7 +49,7 @@ extern "C" {
 struct ctdb_footer{
     uint64_t tran_count;
     uint64_t del_count;
-    int64_t root_pos;
+    off_t root_pos;
 };
 
 struct ctdb{
@@ -60,12 +60,12 @@ struct ctdb{
 struct ctdb_node{
     uint8_t prefix_len;
     char prefix[CTDB_MAX_KEY_LEN + 1];
-    int64_t leaf_pos;
+    off_t leaf_pos;
     
     uint8_t items_count;
     struct ctdb_node_item{
         char sub_prefix_char;
-        int64_t sub_node_pos;
+        off_t sub_node_pos;
     }items[CTDB_MAX_CHAR_RANGE];
 };
 
@@ -74,7 +74,7 @@ struct ctdb_leaf{
     //int expire;
     //int fingerprint;
     uint32_t value_len;
-    int64_t value_pos;
+    off_t value_pos;
 };
 
 struct ctdb_transaction{
