@@ -13,11 +13,11 @@ ctdb is a simple & lightweight key-value database, based on Append-only Compress
 ### Quick start
 
 ```
-make simple; rm test.db; ./simple
+make iter; ./iter
+
+make simple; ./simple
 
 make trans; rm test.db; ./trans
-
-make iter; rm test.db; ./iter
 ```
 
 ### example
