@@ -134,16 +134,17 @@ void transction_test() {
 
     printf("-----------------------\n");
 
-    db = ctdb_open(path);
-    assert(NULL != db);
-    assert(0 == db->footer.del_count);
-    assert(3 == db->footer.tran_count);
-    struct ctdb_leaf leaf = ctdb_get(db, "app", 3);
+    assert(NULL != (db = ctdb_open(path)));
+    assert(NULL != (trans = ctdb_transaction_begin(db)));
+    assert(0 == trans->footer.del_count);
+    assert(3 == trans->footer.tran_count);
+    struct ctdb_leaf leaf = ctdb_get(trans, "app", 3);
     assert(0 < leaf.value_len);
     char *value = read_value_from_file(db->fd, leaf.value_len, leaf.value_pos);
     assert(NULL != value);
     printf("app valua is: '%.*s'\n", leaf.value_len, value);
     free(value);
+    ctdb_transaction_free(trans);
     ctdb_close(db);
 }
 
@@ -165,11 +166,11 @@ void transction_test2() {
 
     printf("-----------------------\n");
 
-    db = ctdb_open(path);
-    assert(NULL != db);
-    assert(0 == db->footer.del_count);
-    assert(4 == db->footer.tran_count);
-    struct ctdb_leaf leaf = ctdb_get(db, "app", 3);
+    assert(NULL != (db = ctdb_open(path)));
+    assert(NULL != (trans = ctdb_transaction_begin(db)));
+    assert(0 == trans->footer.del_count);
+    assert(4 == trans->footer.tran_count);
+    struct ctdb_leaf leaf = ctdb_get(trans, "app", 3);
     assert(0 < leaf.value_len);
     char *value = read_value_from_file(db->fd, leaf.value_len, leaf.value_pos);
     assert(NULL != value);
@@ -185,12 +186,14 @@ void transction_test2() {
     assert(CTDB_OK == ctdb_transaction_commit(trans));
     ctdb_transaction_free(trans);
     
-    leaf = ctdb_get(db, "app", 3);
+    assert(NULL != (trans = ctdb_transaction_begin(db)));
+    leaf = ctdb_get(trans, "app", 3);
     assert(0 < leaf.value_len);
     value = read_value_from_file(db->fd, leaf.value_len, leaf.value_pos);
     assert(NULL != value);
     printf("app valua is: '%.*s'\n", leaf.value_len, value);
     free(value);
+    ctdb_transaction_free(trans);
     ctdb_close(db);
 }
 
