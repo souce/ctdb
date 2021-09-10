@@ -139,10 +139,12 @@ void test_iter(int count, char *prefix, uint8_t prefix_len) {
     assert(CTDB_OK == ctdb_transaction_commit(trans));
     ctdb_transaction_free(trans);
     
+
+    assert(NULL != (trans = ctdb_transaction_begin(db)));
     g_iter_count = 0;
 #if defined(__APPLE__)
-    if(CTDB_OK == ctdb_iterator_travel(db, prefix, prefix_len, traversal)){
-        printf("iterator sucess, prefix:'%s' count:%llu iter_count:%d\n", prefix, db->footer.tran_count, g_iter_count);
+    if(CTDB_OK == ctdb_iterator_travel(trans, prefix, prefix_len, traversal)){
+        printf("iterator sucess, prefix:'%s' count:%llu iter_count:%d\n", prefix, trans->footer.tran_count, g_iter_count);
     }
 #else
     int traversal(int fd, char *key, uint8_t key_len, struct ctdb_leaf leaf){
@@ -157,10 +159,11 @@ void test_iter(int count, char *prefix, uint8_t prefix_len) {
         
         return CTDB_OK; //continue
     }
-    if(CTDB_OK == ctdb_iterator_travel(db, prefix, prefix_len, traversal)){
-        printf("iterator sucess, prefix:'%s' count:%llu iter_count:%d\n", prefix, db->footer.tran_count, g_iter_count);
+    if(CTDB_OK == ctdb_iterator_travel(trans, prefix, prefix_len, traversal)){
+        printf("iterator sucess, prefix:'%s' count:%llu iter_count:%d\n", prefix, trans->footer.tran_count, g_iter_count);
     }
 #endif
+    ctdb_transaction_free(trans);
     ctdb_close(db);
 }
 
