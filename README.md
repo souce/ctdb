@@ -46,10 +46,12 @@ get:
 ```c
 struct ctdb *db = ctdb_open("./test.db");
 
-struct ctdb_leaf leaf = ctdb_get(db, "app", 3);
+struct ctdb_transaction *trans = ctdb_transaction_begin(db);
+struct ctdb_leaf leaf = ctdb_get(trans, "app", 3);
 //seek(db->fd, leaf.value_pos, SEEK_SET)
 //read(db->fd, buffer, leaf.value_len)) or sendfile(client_fd, db->fd, &off, leaf.value_len)
 
+ctdb_transaction_free(trans);
 ctdb_close(db);
 ```
 
@@ -57,6 +59,7 @@ traverse:
 
 ```c
 struct ctdb *db = ctdb_open("./test.db");
+struct ctdb_transaction *trans = ctdb_transaction_begin(db);
 
 //traverse callback
 int traversal(char *key, int key_len, struct ctdb_leaf leaf){
@@ -66,14 +69,15 @@ int traversal(char *key, int key_len, struct ctdb_leaf leaf){
 }
 
 //traverse all the data
-if(CTDB_OK == ctdb_iterator_travel(db, "", 0, traversal)){
+if(CTDB_OK == ctdb_iterator_travel(trans, "", 0, traversal)){
     printf("end of traversal\n");
 }
 
 //traversing data starting with "app"
-if(CTDB_OK == ctdb_iterator_travel(db, "app", 3, traversal)){
+if(CTDB_OK == ctdb_iterator_travel(trans, "app", 3, traversal)){
     printf("end of traversal\n");
 }
 
+ctdb_transaction_free(trans);
 ctdb_close(db);
 ```
