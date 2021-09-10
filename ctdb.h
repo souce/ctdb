@@ -54,7 +54,6 @@ struct ctdb_footer{
 
 struct ctdb{
     int fd;
-    struct ctdb_footer footer;
 };
 
 struct ctdb_node{
@@ -80,13 +79,13 @@ struct ctdb_leaf{
 struct ctdb_transaction{
     uint8_t is_isvalid;
     struct ctdb *db;
-    struct ctdb_footer new_footer;
+    struct ctdb_footer footer;
 };
 
 //API
 struct ctdb *ctdb_open(char *path);
-struct ctdb_leaf ctdb_get(struct ctdb *db, char *key, uint8_t key_len);
 struct ctdb_transaction *ctdb_transaction_begin(struct ctdb *db);
+struct ctdb_leaf ctdb_get(struct ctdb_transaction *trans, char *key, uint8_t key_len);
 int ctdb_put(struct ctdb_transaction *trans, char *key, uint8_t key_len, char *value, uint32_t value_len);
 int ctdb_del(struct ctdb_transaction *trans, char *key, uint8_t key_len);
 int ctdb_transaction_commit(struct ctdb_transaction *trans);
@@ -96,7 +95,7 @@ void ctdb_close(struct ctdb *db);
 
 //iterator
 typedef int ctdb_traversal(int fd, char *key, uint8_t key_len, struct ctdb_leaf leaf);
-int ctdb_iterator_travel(struct ctdb *db, char *key, uint8_t key_len, ctdb_traversal *traversal);
+int ctdb_iterator_travel(struct ctdb_transaction *trans, char *key, uint8_t key_len, ctdb_traversal *traversal);
 
 #ifdef __cplusplus
 }
