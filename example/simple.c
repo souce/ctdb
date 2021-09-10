@@ -108,6 +108,7 @@ void simple_test() {
     assert(NULL != db);
 
     struct ctdb_transaction *trans = ctdb_transaction_begin(db);
+    printf("before test: del_count:%llu tran_count:%llu\n", trans->footer.del_count, trans->footer.tran_count);
     assert(NULL != trans);
     assert(CTDB_OK == ctdb_put(trans, "apple", 5, "apple_value", 11));
     assert(CTDB_OK == ctdb_transaction_commit(trans));
@@ -129,39 +130,38 @@ void simple_test() {
     ctdb_transaction_free(trans);
 
     assert(NULL != (trans = ctdb_transaction_begin(db)));
-    assert(CTDB_OK == ctdb_put(trans, "app", 3, "app_6666666669", 14));
+    assert(CTDB_OK == ctdb_put(trans, "app", 3, "app_6666666669", 14)); //modify
     assert(CTDB_OK == ctdb_transaction_commit(trans));
     ctdb_transaction_free(trans);
     ctdb_close(db);
 
     printf("-----------------------\n");
 
-    db = ctdb_open(path);
-    assert(NULL != db);
-
-    printf("after put: del_count:%llu tran_count:%llu\n", db->footer.del_count, db->footer.tran_count);
-    struct ctdb_leaf leaf = ctdb_get(db, "app", 3);
+    assert(NULL != (db = ctdb_open(path)));
+    assert(NULL != (trans = ctdb_transaction_begin(db)));
+    printf("after put: del_count:%llu tran_count:%llu\n", trans->footer.del_count, trans->footer.tran_count);
+    struct ctdb_leaf leaf = ctdb_get(trans, "app", 3);
     assert(0 < leaf.value_len);
     char *value = read_value_from_file(db->fd, leaf.value_len, leaf.value_pos);
     assert(NULL != value);
     printf("app: %.*s\n", leaf.value_len, value);
     free(value);
 
-    leaf = ctdb_get(db, "apple", 5);
+    leaf = ctdb_get(trans, "apple", 5);
     assert(0 < leaf.value_len);
     value = read_value_from_file(db->fd, leaf.value_len, leaf.value_pos);
     assert(NULL != value);
     printf("apple: %.*s\n", leaf.value_len, value);
     free(value);
     
-    leaf = ctdb_get(db, "application", 11);
+    leaf = ctdb_get(trans, "application", 11);
     assert(0 < leaf.value_len);
     value = read_value_from_file(db->fd, leaf.value_len, leaf.value_pos);
     assert(NULL != value);
     printf("application: %.*s\n", leaf.value_len, value);
     free(value);
 
-    leaf = ctdb_get(db, "xxx", 3);
+    leaf = ctdb_get(trans, "xxx", 3);
     assert(0 < leaf.value_len);
     value = read_value_from_file(db->fd, leaf.value_len, leaf.value_pos);
     assert(NULL != value);
@@ -178,10 +178,11 @@ void simple_test() {
     assert(CTDB_OK == ctdb_transaction_commit(trans));
     ctdb_transaction_free(trans);
     
-    leaf = ctdb_get(db, "xxx", 3);
+    assert(NULL != (trans = ctdb_transaction_begin(db)));
+    leaf = ctdb_get(trans, "xxx", 3);
     assert(0 == leaf.value_len);
-    printf("after del: del_count:%llu tran_count:%llu\n", db->footer.del_count, db->footer.tran_count);
-
+    printf("after del: del_count:%llu tran_count:%llu\n", trans->footer.del_count, trans->footer.tran_count);
+    ctdb_transaction_free(trans);
     ctdb_close(db);
 }
 
@@ -199,11 +200,14 @@ void stress_put_testing_single_transaction(int key_len, int count) {
     int i = 0;
     for(; i < count; i++){
         char *key = random_str(key_len);
+        //char *key = random_str_shortly(key_len);
+        //char *key = random_str_num(key_len);
+
         assert(CTDB_OK == ctdb_put(trans, key, key_len, key, key_len));
         free(key);
     }
     ctdb_transaction_commit(trans);
-    printf("stress: %d pieces of data in 1 transaction, time consuming:%lldms del_count:%llu tran_count:%llu\n", count, getCurrentTime() - start, db->footer.del_count, db->footer.tran_count);
+    printf("stress: %d pieces of data in 1 transaction, time consuming:%lldms del_count:%llu tran_count:%llu\n", count, getCurrentTime() - start, trans->footer.del_count, trans->footer.tran_count);
     ctdb_transaction_free(trans);
     ctdb_close(db);
 }
@@ -217,6 +221,8 @@ void stress_put_testing_multiple_transactions(int count) {
     assert(NULL != db);
     assert(key_len <= CTDB_MAX_KEY_LEN);
 
+    uint64_t del_count = 0;
+    uint64_t tran_count = 0;
     int64_t start = getCurrentTime();
     int i = 0;
     for(; i < count; i++){
@@ -229,10 +235,12 @@ void stress_put_testing_multiple_transactions(int count) {
         assert(CTDB_OK == ctdb_put(trans, key, key_len, key, key_len));
         assert(NULL != trans);
         assert(CTDB_OK == ctdb_transaction_commit(trans));
+        del_count = trans->footer.del_count;
+        tran_count = trans->footer.tran_count;
         ctdb_transaction_free(trans);
         free(key);
     }
-    printf("stress: %d pieces of data in %d transactions, time consuming:%lldms del_count:%llu tran_count:%llu\n", count, count, getCurrentTime() - start, db->footer.del_count, db->footer.tran_count);
+    printf("stress: %d pieces of data in %d transactions, time consuming:%lldms del_count:%llu tran_count:%llu\n", count, count, getCurrentTime() - start, del_count, tran_count);
     ctdb_close(db);
 }
 
@@ -265,17 +273,19 @@ void stress_get_testing(int count) {
     assert(CTDB_OK == ctdb_transaction_commit(trans));
     ctdb_transaction_free(trans);
 
+    assert(NULL != (trans = ctdb_transaction_begin(db)));
     int64_t start = getCurrentTime();
     i = 0;
     for(; i < count; i++){
-        struct ctdb_leaf leaf = ctdb_get(db, test_key, test_key_len);
+        struct ctdb_leaf leaf = ctdb_get(trans, test_key, test_key_len);
         assert(0 < leaf.value_len);
         char *value = read_value_from_file(db->fd, leaf.value_len, leaf.value_pos);
         assert(NULL != value);
         assert(test_key_len == leaf.value_len && 0 == strncmp(test_key, value, test_key_len));
         free(value);
     }
-    printf("stress: %d pieces of data read operation, time consuming:%lldms del_count:%llu tran_count:%llu\n", count, getCurrentTime() - start, db->footer.del_count, db->footer.tran_count);
+    printf("stress: %d pieces of data read operation, time consuming:%lldms del_count:%llu tran_count:%llu\n", count, getCurrentTime() - start, trans->footer.del_count, trans->footer.tran_count);
+    ctdb_transaction_free(trans);
     ctdb_close(db);
 }
 
