@@ -382,14 +382,13 @@ struct ctdb *ctdb_open(char *path) {
     if (NULL == db) goto err;
 
     if (-1 == access(path, F_OK)) {
-        fd = open(path, O_RDWR | O_CREAT, 0777);
+        fd = open(path, O_RDWR | O_CREAT, 0666);
         if (0 > fd) goto err;
         if (SERIALIZER_OK != dump_header(fd)) goto err;
     } else {
         fd = open(path, O_RDWR);
         if (0 > fd) goto err;
         if (SERIALIZER_OK != check_header(fd)) goto err;
-        load_footer(fd, &(db->footer));  //try to find the last successful transaction, the old data will not be covered
     }
     db->fd = fd;
     return db;
@@ -406,23 +405,35 @@ void ctdb_close(struct ctdb *db) {
     free(db);
 }
 
-struct ctdb_leaf ctdb_get(struct ctdb *db, char *key, uint8_t key_len) {
+struct ctdb_transaction *ctdb_transaction_begin(struct ctdb *db) {
+    struct ctdb_transaction *trans = calloc(1, sizeof(*trans));
+    if (NULL != trans) {
+        trans->is_isvalid = 1;
+        trans->db = db;
+        load_footer(db->fd, &(trans->footer));  //try to find the last successful transaction, the old data will not be covered
+    }
+    return trans;
+}
+
+struct ctdb_leaf ctdb_get(struct ctdb_transaction *trans, char *key, uint8_t key_len) {
     struct ctdb_leaf leaf = { .value_len = 0, .value_pos = -1 };
+
+    if (NULL == trans || 1 != trans->is_isvalid) goto err;  //verify that the transaction has not been committed or rolled back
+    if (0 >= trans->footer.root_pos) goto err;
     if (0 >= key_len || CTDB_MAX_KEY_LEN < key_len || NULL == key) goto err;
-    if (0 >= db->footer.root_pos) goto err;
 
     //search the prefix nodes related to key from the file
     char filled_prefix_key[CTDB_MAX_KEY_LEN + 1] = {[0 ... CTDB_MAX_KEY_LEN] = 0};
     if (filled_prefix_key != strncpy(filled_prefix_key, key, key_len)) goto err;
     
     //load node from the file
-    off_t sub_node_pos = find_node_from_file(db->fd, db->footer.root_pos, filled_prefix_key, key_len, 0, 0, NULL);  //not fuzzy match
+    off_t sub_node_pos = find_node_from_file(trans->db->fd, trans->footer.root_pos, filled_prefix_key, key_len, 0, 0, NULL);  //not fuzzy match
     if (0 >= sub_node_pos) goto err;  //no data found
     struct ctdb_node sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
-    if (CTDB_OK != load_node(db->fd, sub_node_pos, &sub_node)) goto err;
+    if (CTDB_OK != load_node(trans->db->fd, sub_node_pos, &sub_node)) goto err;
     if (0 >= sub_node.leaf_pos) goto err;
 
-    if (CTDB_OK != load_leaf(db->fd, sub_node.leaf_pos, &leaf)) goto err;
+    if (CTDB_OK != load_leaf(trans->db->fd, sub_node.leaf_pos, &leaf)) goto err;
     if (0 == leaf.value_len) goto err;  //the data has been deleted
     return leaf;
 
@@ -431,24 +442,14 @@ err:
     return leaf;
 }
 
-struct ctdb_transaction *ctdb_transaction_begin(struct ctdb *db) {
-    struct ctdb_transaction *trans = calloc(1, sizeof(*trans));
-    if (NULL != trans) {
-        trans->is_isvalid = 1;
-        trans->db = db;
-        trans->new_footer = db->footer;
-    }
-    return trans;
-}
-
 int ctdb_put(struct ctdb_transaction *trans, char *key, uint8_t key_len, char *value, uint32_t value_len) {
     if (NULL == trans || 1 != trans->is_isvalid) goto err;  //verify that the transaction has not been committed or rolled back
     if (0 >= key_len || CTDB_MAX_KEY_LEN < key_len || NULL == key) goto err;
     if (CTDB_MAX_VALUE_LEN < value_len || NULL == value) goto err;  //if value_len is 0, that means delete (whether it exists or not)
 
     struct ctdb_node root = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
-    if (0 < trans->new_footer.root_pos) {
-        if (CTDB_OK != load_node(trans->db->fd, trans->new_footer.root_pos, &root)) goto err;
+    if (0 < trans->footer.root_pos) {
+        if (CTDB_OK != load_node(trans->db->fd, trans->footer.root_pos, &root)) goto err;
     }
 
     //append the value and leaf node to the file
@@ -463,12 +464,12 @@ int ctdb_put(struct ctdb_transaction *trans, char *key, uint8_t key_len, char *v
     if (filled_prefix_key != strncpy(filled_prefix_key, key, key_len)) goto err;
     off_t new_root_pos = append_node_to_file(trans->db->fd, &root, filled_prefix_key, key_len, 0, new_leaf_pos);
     if (0 >= new_root_pos) goto err;
-    trans->new_footer.root_pos = new_root_pos;
+    trans->footer.root_pos = new_root_pos;
 
-    //cumulative the operation count
-    trans->new_footer.tran_count += 1;
+    //cumulative the operation count (the transaction is not written to the file until committed)
+    trans->footer.tran_count += 1;
     if (0 >= value_len || NULL == value)
-        trans->new_footer.del_count += 1;
+        trans->footer.del_count += 1;
     return CTDB_OK;
 
 err:
@@ -485,9 +486,8 @@ int ctdb_transaction_commit(struct ctdb_transaction *trans) {
 
     struct ctdb *db = trans->db;
     //save the 'transaction flag', which means that the transaction was committed successfully
-    if (CTDB_OK != dump_footer(db->fd, &(trans->new_footer))) goto err;
+    if (CTDB_OK != dump_footer(db->fd, &(trans->footer))) goto err;
     if (-1 == fsync(db->fd)) goto err;
-    db->footer = trans->new_footer;
     return CTDB_OK;
 
 err:
@@ -539,20 +539,21 @@ over:
     return CTDB_ERR;
 }
 
-int ctdb_iterator_travel(struct ctdb *db, char *key, uint8_t key_len, ctdb_traversal *traversal) {
+int ctdb_iterator_travel(struct ctdb_transaction *trans, char *key, uint8_t key_len, ctdb_traversal *traversal) {
+    if (NULL == trans || 1 != trans->is_isvalid) goto err;  //verify that the transaction has not been committed or rolled back
     if(CTDB_MAX_KEY_LEN < key_len) goto err;
 
     //search the prefix nodes related to key from the file
     char filled_prefix_key[CTDB_MAX_KEY_LEN + 1] = {[0 ... CTDB_MAX_KEY_LEN] = 0};
     if (filled_prefix_key != strncpy(filled_prefix_key, key, key_len)) goto err;
     uint8_t matched_prefix_len = 0;
-    off_t sub_node_pos = find_node_from_file(db->fd, db->footer.root_pos, filled_prefix_key, key_len, 0, 1, &matched_prefix_len);  //fuzzy match
+    off_t sub_node_pos = find_node_from_file(trans->db->fd, trans->footer.root_pos, filled_prefix_key, key_len, 0, 1, &matched_prefix_len);  //fuzzy match
     if (0 >= sub_node_pos) goto err;  //no data found
 
     //load the starting node of traversal from the file
     struct ctdb_node sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
-    if (CTDB_OK == load_node(db->fd, sub_node_pos, &sub_node)){
-        return iterator_travel(db->fd, &sub_node, filled_prefix_key, matched_prefix_len, traversal);
+    if (CTDB_OK == load_node(trans->db->fd, sub_node_pos, &sub_node)){
+        return iterator_travel(trans->db->fd, &sub_node, filled_prefix_key, matched_prefix_len, traversal);
     }
 
 err:
