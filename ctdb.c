@@ -410,7 +410,7 @@ struct ctdb_transaction *ctdb_transaction_begin(struct ctdb *db) {
     if (NULL != trans) {
         trans->is_isvalid = 1;
         trans->db = db;
-        load_footer(db->fd, &(trans->footer));  //try to find the last successful transaction, the old data will not be covered
+        load_footer(db->fd, &(trans->footer));  //try to find the last successful transaction
     }
     return trans;
 }
@@ -425,10 +425,10 @@ struct ctdb_leaf ctdb_get(struct ctdb_transaction *trans, char *key, uint8_t key
     //search the prefix nodes related to key from the file
     char filled_prefix_key[CTDB_MAX_KEY_LEN + 1] = {[0 ... CTDB_MAX_KEY_LEN] = 0};
     if (filled_prefix_key != strncpy(filled_prefix_key, key, key_len)) goto err;
-    
-    //load node from the file
     off_t sub_node_pos = find_node_from_file(trans->db->fd, trans->footer.root_pos, filled_prefix_key, key_len, 0, 0, NULL);  //not fuzzy match
     if (0 >= sub_node_pos) goto err;  //no data found
+    
+    //load node from the file
     struct ctdb_node sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
     if (CTDB_OK != load_node(trans->db->fd, sub_node_pos, &sub_node)) goto err;
     if (0 >= sub_node.leaf_pos) goto err;
