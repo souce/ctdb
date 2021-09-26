@@ -408,11 +408,19 @@ void ctdb_close(struct ctdb *db) {
 struct ctdb_transaction *ctdb_transaction_begin(struct ctdb *db) {
     struct ctdb_transaction *trans = calloc(1, sizeof(*trans));
     if (NULL != trans) {
+        if(CTDB_OK != load_footer(db->fd, &(trans->footer))){ //try to find the last transaction
+            goto err;
+        }
         trans->is_isvalid = 1;
         trans->db = db;
-        load_footer(db->fd, &(trans->footer));  //try to find the last successful transaction
+        return trans;
     }
-    return trans;
+
+err:
+    if(NULL != trans){
+        free(trans);
+    }
+    return NULL;
 }
 
 struct ctdb_leaf ctdb_get(struct ctdb_transaction *trans, char *key, uint8_t key_len) {
