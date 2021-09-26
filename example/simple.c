@@ -108,8 +108,8 @@ void simple_test() {
     assert(NULL != db);
 
     struct ctdb_transaction *trans = ctdb_transaction_begin(db);
-    printf("before test: del_count:%llu tran_count:%llu\n", trans->footer.del_count, trans->footer.tran_count);
     assert(NULL != trans);
+    printf("before test: del_count:%llu tran_count:%llu\n", trans->footer.del_count, trans->footer.tran_count);
     assert(CTDB_OK == ctdb_put(trans, "apple", 5, "apple_value", 11));
     assert(CTDB_OK == ctdb_transaction_commit(trans));
     ctdb_transaction_free(trans);
