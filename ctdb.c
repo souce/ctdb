@@ -65,7 +65,7 @@ static int dump_header(int fd) {
 static int load_footer(int fd, struct ctdb_footer *footer) {
     off_t file_size = lseek(fd, -CTDB_FOOTER_ALIGNED_BASE, SEEK_END);
     off_t flag_aligned_pos = FOOTER_ALIGNED(file_size);  //find the right place for the 'transaction flag'
-    while (flag_aligned_pos > CTDB_HEADER_SIZE + CTDB_FOOTER_ALIGNED_BASE) {
+    while (flag_aligned_pos >= CTDB_HEADER_SIZE) {
         uint64_t cksum_1 = 1, cksum_2 = 2;
         struct ctdb_footer footer_in_file = {.tran_count = 0, .del_count = 0, .root_pos = 0};
         char footer_buf[CTDB_FOOTER_SIZE + 1] = {[0 ... CTDB_FOOTER_SIZE] = 0};
@@ -385,6 +385,8 @@ struct ctdb *ctdb_open(char *path) {
         fd = open(path, O_RDWR | O_CREAT, 0666);
         if (0 > fd) goto err;
         if (SERIALIZER_OK != dump_header(fd)) goto err;
+        if (SERIALIZER_OK != dump_footer(fd, &(struct ctdb_footer){ .tran_count=0, .del_count=0, .root_pos=0 })) goto err;
+        if (-1 == fsync(db->fd)) goto err;
     } else {
         fd = open(path, O_RDWR);
         if (0 > fd) goto err;
@@ -408,7 +410,7 @@ void ctdb_close(struct ctdb *db) {
 struct ctdb_transaction *ctdb_transaction_begin(struct ctdb *db) {
     struct ctdb_transaction *trans = calloc(1, sizeof(*trans));
     if (NULL != trans) {
-        if(CTDB_OK != load_footer(db->fd, &(trans->footer))){ //try to find the last transaction
+        if(CTDB_OK != load_footer(db->fd, &(trans->footer))){  //try to find the last transaction
             goto err;
         }
         trans->is_isvalid = 1;
