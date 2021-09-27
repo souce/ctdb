@@ -386,7 +386,7 @@ struct ctdb *ctdb_open(char *path) {
         if (0 > fd) goto err;
         if (SERIALIZER_OK != dump_header(fd)) goto err;
         if (SERIALIZER_OK != dump_footer(fd, &(struct ctdb_footer){ .tran_count=0, .del_count=0, .root_pos=0 })) goto err;
-        if (-1 == fsync(db->fd)) goto err;
+        if (-1 == fsync(fd)) goto err;
     } else {
         fd = open(path, O_RDWR);
         if (0 > fd) goto err;
