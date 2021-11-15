@@ -224,9 +224,9 @@ int main(){
     srand(time(NULL));
 
     simple_test();
-    stress_put_testing_single_transaction(5, 5000);
+    stress_put_testing_single_transaction(5, 25000);
     stress_put_testing_multiple_transactions(5000);
-    stress_get_testing(100);
+    stress_get_testing(50000);
     
     printf("over\n");
     return 0;
