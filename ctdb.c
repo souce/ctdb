@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/sendfile.h>
 #include <unistd.h>
 
 #include "serializer.h"
@@ -35,12 +36,11 @@
 static int check_header(int fd) {
     char magic_str[CTDB_MAGIC_LEN + 1] = {[0 ... CTDB_MAGIC_LEN] = 0};
     int version_num = -1;
-    char header_buf[CTDB_HEADER_SIZE + 1] = {[0 ... CTDB_HEADER_SIZE] = 0};
-    char *buf_cur = header_buf, *buf_end = header_buf + CTDB_HEADER_SIZE;
+    struct serializer ser = SERIALIZER_INIT(CTDB_HEADER_SIZE);
     if (-1 == lseek(fd, 0, SEEK_SET)) return CTDB_ERR;  //get back to the beginning
-    if (CTDB_HEADER_SIZE != read(fd, header_buf, CTDB_HEADER_SIZE)) return CTDB_ERR;
-    if (SERIALIZER_OK != SERIALIZER_BUF_READ_STR(buf_cur, buf_end, magic_str, CTDB_MAGIC_LEN) ||
-        SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, version_num, uint32_t)) {
+    if (CTDB_HEADER_SIZE != read(fd, ser.buf, CTDB_HEADER_SIZE)) return CTDB_ERR;
+    if (SERIALIZER_OK != SERIALIZER_READ_STR(ser, magic_str, CTDB_MAGIC_LEN) ||
+        SERIALIZER_OK != SERIALIZER_READ_NUM(ser, version_num, uint32_t)) {
         return CTDB_ERR;
     }
     if (0 == strncmp(magic_str, CTDB_MAGIC_STR, CTDB_MAGIC_LEN) && CTDB_VERSION_NUM == version_num)
@@ -49,14 +49,13 @@ static int check_header(int fd) {
 }
 
 static int dump_header(int fd) {
-    char header_buf[CTDB_HEADER_SIZE + 1] = {[0 ... CTDB_HEADER_SIZE] = 0};
-    char *buf_cur = header_buf, *buf_end = header_buf + CTDB_HEADER_SIZE;
-    if (SERIALIZER_OK != SERIALIZER_BUF_WRITE_STR(buf_cur, buf_end, CTDB_MAGIC_STR, CTDB_MAGIC_LEN) ||
-        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, CTDB_VERSION_NUM, uint32_t)) {
+    struct serializer ser = SERIALIZER_INIT(CTDB_HEADER_SIZE);
+    if (SERIALIZER_OK != SERIALIZER_WRITE_STR(ser, CTDB_MAGIC_STR, CTDB_MAGIC_LEN) ||
+        SERIALIZER_OK != SERIALIZER_WRITE_NUM(ser, CTDB_VERSION_NUM, uint32_t)) {
         return CTDB_ERR;
     }
     if (-1 == lseek(fd, 0, SEEK_SET)) return CTDB_ERR;  //get back to the beginning
-    if (CTDB_HEADER_SIZE != write(fd, header_buf, CTDB_HEADER_SIZE)) return CTDB_ERR;
+    if (CTDB_HEADER_SIZE != write(fd, ser.buf, CTDB_HEADER_SIZE)) return CTDB_ERR;
     return CTDB_OK;
 }
 
@@ -68,15 +67,14 @@ static int load_footer(int fd, struct ctdb_footer *footer) {
     while (flag_aligned_pos >= CTDB_HEADER_SIZE) {
         uint64_t cksum_1 = 1, cksum_2 = 2;
         struct ctdb_footer footer_in_file = {.tran_count = 0, .del_count = 0, .root_pos = 0};
-        char footer_buf[CTDB_FOOTER_SIZE + 1] = {[0 ... CTDB_FOOTER_SIZE] = 0};
-        char *buf_cur = footer_buf, *buf_end = footer_buf + CTDB_FOOTER_SIZE;
+        struct serializer ser = SERIALIZER_INIT(CTDB_FOOTER_SIZE);
         if (-1 == lseek(fd, flag_aligned_pos, SEEK_SET)) goto retry;
-        if (CTDB_FOOTER_SIZE != read(fd, footer_buf, CTDB_FOOTER_SIZE)) goto retry;
-        if (SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, cksum_1, uint64_t) ||
-            SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, footer_in_file.tran_count, uint64_t) ||
-            SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, footer_in_file.del_count, uint64_t) ||
-            SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, footer_in_file.root_pos, int64_t) ||
-            SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, cksum_2, uint64_t)) {
+        if (CTDB_FOOTER_SIZE != read(fd, ser.buf, CTDB_FOOTER_SIZE)) goto retry;
+        if (SERIALIZER_OK != SERIALIZER_READ_NUM(ser, cksum_1, uint64_t) ||
+            SERIALIZER_OK != SERIALIZER_READ_NUM(ser, footer_in_file.tran_count, uint64_t) ||
+            SERIALIZER_OK != SERIALIZER_READ_NUM(ser, footer_in_file.del_count, uint64_t) ||
+            SERIALIZER_OK != SERIALIZER_READ_NUM(ser, footer_in_file.root_pos, int64_t) ||
+            SERIALIZER_OK != SERIALIZER_READ_NUM(ser, cksum_2, uint64_t)) {
             goto retry;
         }
         //check the mark, make sure the data is correct (CheckSum)
@@ -95,20 +93,19 @@ static int load_footer(int fd, struct ctdb_footer *footer) {
 }
 
 static int dump_footer(int fd, struct ctdb_footer *footer) {
-    char footer_buf[CTDB_FOOTER_SIZE + 1] = {[0 ... CTDB_FOOTER_SIZE] = 0};
-    char *buf_cur = footer_buf, *buf_end = footer_buf + CTDB_FOOTER_SIZE;
+    struct serializer ser = SERIALIZER_INIT(CTDB_FOOTER_SIZE);
     uint64_t cksum = ~(footer->tran_count + footer->del_count + footer->root_pos);  //CheckSum
-    if (SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, cksum, uint64_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, footer->tran_count, uint64_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, footer->del_count, uint64_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, footer->root_pos, int64_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, cksum, uint64_t)) {
+    if (SERIALIZER_OK != SERIALIZER_WRITE_NUM(ser, cksum, uint64_t) ||
+        SERIALIZER_OK != SERIALIZER_WRITE_NUM(ser, footer->tran_count, uint64_t) ||
+        SERIALIZER_OK != SERIALIZER_WRITE_NUM(ser, footer->del_count, uint64_t) ||
+        SERIALIZER_OK != SERIALIZER_WRITE_NUM(ser, footer->root_pos, int64_t) ||
+        SERIALIZER_OK != SERIALIZER_WRITE_NUM(ser, cksum, uint64_t)) {
         return CTDB_ERR;
     }
     off_t file_size = lseek(fd, 0, SEEK_END);
     off_t flag_aligned_pos = FOOTER_ALIGNED(file_size);  //find a right position to write the 'transaction flag'
     if (-1 == lseek(fd, flag_aligned_pos, SEEK_SET)) return CTDB_ERR;
-    if (CTDB_FOOTER_SIZE != write(fd, footer_buf, CTDB_FOOTER_SIZE)) return CTDB_ERR;
+    if (CTDB_FOOTER_SIZE != write(fd, ser.buf, CTDB_FOOTER_SIZE)) return CTDB_ERR;
     return CTDB_OK;
 }
 
@@ -123,28 +120,26 @@ err:
 }
 
 static inline int load_items(int fd, int items_count, struct ctdb_node_item *items) {
-    int item_size = items_count * CTDB_ITEMS_SIZE;
-    char item_buf[item_size + 1];
-    char *buf_cur = item_buf, *buf_end = item_buf + item_size;
-    if (item_size != read(fd, item_buf, item_size)) return CTDB_ERR;
+    struct serializer ser = SERIALIZER_INIT(CTDB_MAX_CHAR_RANGE * CTDB_ITEMS_SIZE);
+    size_t real_item_size = items_count * CTDB_ITEMS_SIZE;
+    if (real_item_size != read(fd, ser.buf, real_item_size)) return CTDB_ERR;
     int i = 0;
     for (; i < items_count; i++) {
-        if (SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, items[i].sub_prefix_char, uint8_t) ||
-            SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, items[i].sub_node_pos, int64_t)) {
+        if (SERIALIZER_OK != SERIALIZER_READ_NUM(ser, items[i].sub_prefix_char, uint8_t) ||
+            SERIALIZER_OK != SERIALIZER_READ_NUM(ser, items[i].sub_node_pos, int64_t)) {
             return CTDB_ERR;
         }
     }
     return CTDB_OK;
 }
 static int load_node(int fd, off_t node_pos, struct ctdb_node *node) {
-    char node_buf[CTDB_NODE_SIZE + 1] = {[0 ... CTDB_NODE_SIZE] = 0};
-    char *buf_cur = node_buf, *buf_end = node_buf + CTDB_NODE_SIZE;
+    struct serializer ser = SERIALIZER_INIT(CTDB_NODE_SIZE);
     if (-1 == lseek(fd, node_pos, SEEK_SET)) return CTDB_ERR;
-    if (CTDB_NODE_SIZE != read(fd, node_buf, CTDB_NODE_SIZE)) return CTDB_ERR;
-    if (SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, node->prefix_len, uint8_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_READ_STR(buf_cur, buf_end, node->prefix, CTDB_MAX_KEY_LEN) ||
-        SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, node->leaf_pos, int64_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, node->items_count, uint8_t)) {
+    if (CTDB_NODE_SIZE != read(fd, ser.buf, CTDB_NODE_SIZE)) return CTDB_ERR;
+    if (SERIALIZER_OK != SERIALIZER_READ_NUM(ser, node->prefix_len, uint8_t) ||
+        SERIALIZER_OK != SERIALIZER_READ_STR(ser, node->prefix, node->prefix_len) ||
+        SERIALIZER_OK != SERIALIZER_READ_NUM(ser, node->leaf_pos, int64_t) ||
+        SERIALIZER_OK != SERIALIZER_READ_NUM(ser, node->items_count, uint8_t)) {
         return CTDB_ERR;
     }
     if (CTDB_OK != load_items(fd, node->items_count, node->items)) return CTDB_ERR;
@@ -152,29 +147,28 @@ static int load_node(int fd, off_t node_pos, struct ctdb_node *node) {
 }
 
 static inline int dump_items(int fd, int items_count, struct ctdb_node_item *items) {
-    int item_size = items_count * CTDB_ITEMS_SIZE;
-    char item_buf[item_size + 1];
-    char *buf_cur = item_buf, *buf_end = item_buf + item_size;
+    struct serializer ser = SERIALIZER_INIT(CTDB_MAX_CHAR_RANGE * CTDB_ITEMS_SIZE);
     int i = 0;
     for (; i < items_count; i++) {
-        if (SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, items[i].sub_prefix_char, uint8_t) ||
-            SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, items[i].sub_node_pos, int64_t)) {
+        if (SERIALIZER_OK != SERIALIZER_WRITE_NUM(ser, items[i].sub_prefix_char, uint8_t) ||
+            SERIALIZER_OK != SERIALIZER_WRITE_NUM(ser, items[i].sub_node_pos, int64_t)) {
             return CTDB_ERR;
         }
     }
-    if (item_size != write(fd, item_buf, item_size)) return CTDB_ERR;
+    size_t real_item_size = items_count * CTDB_ITEMS_SIZE;
+    if (real_item_size != write(fd, ser.buf, real_item_size)) return CTDB_ERR;
     return CTDB_OK;
 }
-static off_t dump_node(int fd, struct ctdb_node *node) {
-    char node_buf[CTDB_NODE_SIZE + 1] = {[0 ... CTDB_NODE_SIZE] = 0};
-    char *buf_cur = node_buf, *buf_end = node_buf + CTDB_NODE_SIZE;
-    if (SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, node->prefix_len, uint8_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_WRITE_STR(buf_cur, buf_end, node->prefix, CTDB_MAX_KEY_LEN) ||
-        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, node->leaf_pos, int64_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, node->items_count, uint8_t)) {
+static off_t dump_node(int fd, struct ctdb_node *node) {   
+    struct serializer ser = SERIALIZER_INIT(CTDB_NODE_SIZE);
+    if (SERIALIZER_OK != SERIALIZER_WRITE_NUM(ser, node->prefix_len, uint8_t) ||
+        SERIALIZER_OK != SERIALIZER_WRITE_STR(ser, node->prefix, node->prefix_len) ||
+        SERIALIZER_OK != SERIALIZER_WRITE_NUM(ser, node->leaf_pos, int64_t) ||
+        SERIALIZER_OK != SERIALIZER_WRITE_NUM(ser, node->items_count, uint8_t)) {
         goto err;
     }
-    off_t node_pos = append_to_end(fd, node_buf, CTDB_NODE_SIZE);
+    off_t node_pos = append_to_end(fd, ser.buf, CTDB_NODE_SIZE);
+    
     if (0 >= node_pos) goto err;
     if (CTDB_OK != dump_items(fd, node->items_count, node->items)) goto err;
     return node_pos;
@@ -184,27 +178,25 @@ err:
 }
 
 static int load_leaf(int fd, off_t leaf_pos, struct ctdb_leaf *leaf) {
-    char leaf_buf[CTDB_LEAF_SIZE + 1] = {[0 ... CTDB_LEAF_SIZE] = 0};
-    char *buf_cur = leaf_buf, *buf_end = leaf_buf + CTDB_LEAF_SIZE;
+    struct serializer ser = SERIALIZER_INIT(CTDB_LEAF_SIZE);
     if (-1 == lseek(fd, leaf_pos, SEEK_SET)) return CTDB_ERR;
-    if (CTDB_LEAF_SIZE != read(fd, leaf_buf, CTDB_LEAF_SIZE)) return CTDB_ERR;
-    if (SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, leaf->value_len, uint32_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_READ_NUM(buf_cur, buf_end, leaf->value_pos, int64_t)) {
+    if (CTDB_LEAF_SIZE != read(fd, ser.buf, CTDB_LEAF_SIZE)) return CTDB_ERR;
+    if (SERIALIZER_OK != SERIALIZER_READ_NUM(ser, leaf->version, uint64_t) ||
+        SERIALIZER_OK != SERIALIZER_READ_NUM(ser, leaf->value_len, uint32_t) ||
+        SERIALIZER_OK != SERIALIZER_READ_NUM(ser, leaf->value_pos, int64_t)) {
         return CTDB_ERR;
     }
     return CTDB_OK;
 }
 
 static off_t dump_leaf(int fd, struct ctdb_leaf *leaf) {
-    char leaf_buf[CTDB_LEAF_SIZE + 1] = {[0 ... CTDB_LEAF_SIZE] = 0};
-    char *buf_cur = leaf_buf, *buf_end = leaf_buf + CTDB_LEAF_SIZE;
-    if (SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, leaf->value_len, uint32_t) ||
-        SERIALIZER_OK != SERIALIZER_BUF_WRITE_NUM(buf_cur, buf_end, leaf->value_pos, int64_t)) {
+    struct serializer ser = SERIALIZER_INIT(CTDB_LEAF_SIZE);
+    if (SERIALIZER_OK != SERIALIZER_WRITE_NUM(ser, leaf->version, uint64_t) ||
+        SERIALIZER_OK != SERIALIZER_WRITE_NUM(ser, leaf->value_len, uint32_t) ||
+        SERIALIZER_OK != SERIALIZER_WRITE_NUM(ser, leaf->value_pos, int64_t)) {
         goto err;
     }
-    off_t leaf_pos = append_to_end(fd, leaf_buf, CTDB_LEAF_SIZE);
-    if (0 >= leaf_pos) goto err;
-    return leaf_pos;
+    return append_to_end(fd, ser.buf, CTDB_LEAF_SIZE);
 
 err:
     return -1;
@@ -401,10 +393,12 @@ err:
     return NULL;
 }
 
-void ctdb_close(struct ctdb *db) {
-    if (NULL == db) return;
-    if (0 <= db->fd) close(db->fd);
-    free(db);
+void ctdb_close(struct ctdb **db) {
+    if (NULL == db || NULL == *db) return;
+    if (0 <= (*db)->fd) 
+        close((*db)->fd);
+    free(*db);
+    *db = NULL;
 }
 
 struct ctdb_transaction *ctdb_transaction_begin(struct ctdb *db) {
@@ -419,15 +413,11 @@ struct ctdb_transaction *ctdb_transaction_begin(struct ctdb *db) {
     }
 
 err:
-    if(NULL != trans){
-        free(trans);
-    }
+    free(trans);
     return NULL;
 }
 
 struct ctdb_leaf ctdb_get(struct ctdb_transaction *trans, char *key, uint8_t key_len) {
-    struct ctdb_leaf leaf = { .value_len = 0, .value_pos = -1 };
-
     if (NULL == trans || 1 != trans->is_isvalid) goto err;  //verify that the transaction has not been committed or rolled back
     if (0 >= trans->footer.root_pos) goto err;
     if (0 >= key_len || CTDB_MAX_KEY_LEN < key_len || NULL == key) goto err;
@@ -443,13 +433,13 @@ struct ctdb_leaf ctdb_get(struct ctdb_transaction *trans, char *key, uint8_t key
     if (CTDB_OK != load_node(trans->db->fd, sub_node_pos, &sub_node)) goto err;
     if (0 >= sub_node.leaf_pos) goto err;
 
+    struct ctdb_leaf leaf = {.version = 0, .value_len = 0, .value_pos = -1};
     if (CTDB_OK != load_leaf(trans->db->fd, sub_node.leaf_pos, &leaf)) goto err;
     if (0 == leaf.value_len) goto err;  //the data has been deleted
     return leaf;
 
 err:
-    leaf = (struct ctdb_leaf){ .value_len = 0, .value_pos = -1 };
-    return leaf;
+    return (struct ctdb_leaf){.version = 0, .value_len = 0, .value_pos = -1};
 }
 
 int ctdb_put(struct ctdb_transaction *trans, char *key, uint8_t key_len, char *value, uint32_t value_len) {
@@ -465,7 +455,7 @@ int ctdb_put(struct ctdb_transaction *trans, char *key, uint8_t key_len, char *v
     //append the value and leaf node to the file
     off_t value_pos = append_to_end(trans->db->fd, value, value_len);
     if (0 >= value_pos) goto err;
-    struct ctdb_leaf new_leaf = {.value_len = value_len, .value_pos = value_pos};
+    struct ctdb_leaf new_leaf = {.version = trans->footer.tran_count, .value_len = value_len, .value_pos = value_pos};
     off_t new_leaf_pos = dump_leaf(trans->db->fd, &new_leaf);
     if (0 >= new_leaf_pos) goto err;
 
@@ -510,26 +500,28 @@ void ctdb_transaction_rollback(struct ctdb_transaction *trans) {
     }
 }
 
-void ctdb_transaction_free(struct ctdb_transaction *trans){
-    if (NULL != trans) {
-        free(trans);
-    }
+void ctdb_transaction_free(struct ctdb_transaction **trans){
+    if (NULL == trans || NULL == *trans) return;
+    free(*trans);
+    *trans = NULL;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // iterator
 ///////////////////////////////////////////////////////////////////////////////
 static int iterator_travel(int fd, struct ctdb_node *trav, char *key, uint8_t key_len, ctdb_traversal *traversal) {
-    if ((trav->prefix_len + key_len) < CTDB_MAX_KEY_LEN) {
+    if ((trav->prefix_len + key_len) <= CTDB_MAX_KEY_LEN) {
         char prefix_key[CTDB_MAX_KEY_LEN + 1] = {[0 ... CTDB_MAX_KEY_LEN] = 0};
         if (0 > sprintf(prefix_key, "%.*s%.*s", key_len, key, trav->prefix_len, trav->prefix)) goto over;
         uint8_t prefix_key_len = key_len + trav->prefix_len;
 
         if (0 < trav->leaf_pos) {
-            struct ctdb_leaf leaf = {.value_len = 0, .value_pos = -1};
+            struct ctdb_leaf leaf = {.version = 0, .value_len = 0, .value_pos = -1};
             if (CTDB_OK != load_leaf(fd, trav->leaf_pos, &leaf)) goto over;
-            if (0 < prefix_key_len && 0 < leaf.value_len) {                             //the data has not been deleted
-                if (CTDB_OK != traversal(fd, prefix_key, prefix_key_len, leaf)) goto over;  //the traversal operation has been cancelled
+            if (0 < prefix_key_len && 0 < leaf.value_len) { //the data has not been deleted
+                if (CTDB_OK != traversal(fd, prefix_key, prefix_key_len, leaf)){
+                    goto over; //the traversal operation has been cancelled
+                }
             }
         }
 
@@ -551,7 +543,7 @@ over:
 
 int ctdb_iterator_travel(struct ctdb_transaction *trans, char *key, uint8_t key_len, ctdb_traversal *traversal) {
     if (NULL == trans || 1 != trans->is_isvalid) goto err;  //verify that the transaction has not been committed or rolled back
-    if(CTDB_MAX_KEY_LEN < key_len) goto err;
+    if (CTDB_MAX_KEY_LEN < key_len) goto err;
 
     //search the prefix nodes related to key from the file
     char filled_prefix_key[CTDB_MAX_KEY_LEN + 1] = {[0 ... CTDB_MAX_KEY_LEN] = 0};
@@ -565,6 +557,69 @@ int ctdb_iterator_travel(struct ctdb_transaction *trans, char *key, uint8_t key_
     if (CTDB_OK == load_node(trans->db->fd, sub_node_pos, &sub_node)){
         return iterator_travel(trans->db->fd, &sub_node, filled_prefix_key, matched_prefix_len, traversal);
     }
+
+err:
+    return CTDB_ERR;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// vacuum
+///////////////////////////////////////////////////////////////////////////////
+off_t vacuum_travel(int old_fd, int new_fd, struct ctdb_node *trav) {
+    if (0 < trav->leaf_pos) {
+        struct ctdb_leaf leaf = {.version = 0, .value_len = 0, .value_pos = -1};
+        if (CTDB_OK != load_leaf(old_fd, trav->leaf_pos, &leaf)) goto err;
+        if (0 < leaf.value_len) {
+            //append the leaf to the new_file
+            off_t new_value_pos = lseek(new_fd, 0, SEEK_END);
+            if (0 >= new_value_pos) goto err;
+            off_t offset = leaf.value_pos;
+            if (leaf.value_len != sendfile(new_fd, old_fd, &offset, leaf.value_len)) goto err;
+            
+            struct ctdb_leaf new_leaf = {.version = leaf.version, .value_len = leaf.value_len, .value_pos = new_value_pos};
+            off_t new_leaf_pos = dump_leaf(new_fd, &new_leaf);
+            if (0 >= new_leaf_pos) goto err;
+            trav->leaf_pos = new_leaf_pos;
+        }
+    }
+
+    int items_index = 0;
+    for (; items_index < trav->items_count; items_index++) {
+        off_t old_sub_node_pos = trav->items[items_index].sub_node_pos;
+        struct ctdb_node old_sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
+        if (CTDB_OK != load_node(old_fd, old_sub_node_pos, &old_sub_node)) goto err;
+        off_t new_sub_node_pos = vacuum_travel(old_fd, new_fd, &old_sub_node);
+        if (0 >= new_sub_node_pos) goto err;
+        trav->items[items_index].sub_node_pos = new_sub_node_pos; //update item pos
+    }
+    return dump_node(new_fd, trav); //append the node to the end of file
+
+err:
+    return -1;
+}
+
+int ctdb_vacuum(struct ctdb_transaction *trans, struct ctdb *new_db) {
+    if (NULL == trans || 1 != trans->is_isvalid) goto err; //verify that the transaction has not been committed or rolled back
+    if (NULL == new_db) goto err;
+
+    //copy values to new_db
+    struct ctdb_node root_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
+    if (CTDB_OK != load_node(trans->db->fd, trans->footer.root_pos, &root_node)) goto err;
+    off_t new_root_pos = vacuum_travel(trans->db->fd, new_db->fd, &root_node);
+    if (0 >= new_root_pos) goto err;
+    
+    //commit a new transaction
+    struct ctdb_transaction new_db_trans = { 
+        .is_isvalid = 1, 
+        .db = new_db, 
+        .footer = {
+            .tran_count = trans->footer.tran_count, 
+            .del_count = 0, 
+            .root_pos = new_root_pos
+        }
+    };
+    ctdb_transaction_commit(&new_db_trans);
+    return CTDB_OK;
 
 err:
     return CTDB_ERR;
