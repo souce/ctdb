@@ -25,21 +25,23 @@ extern "C" {
 #define CTDB_I32_LEN 4
 #define CTDB_I64_LEN 8
 
+//file header
 #define CTDB_HEADER_SIZE 128
 #define CTDB_MAGIC_STR "ctdb"
 #define CTDB_MAGIC_LEN 4
 #define CTDB_VERSION_NUM 1
 
+//limits
 #define CTDB_MAX_KEY_LEN 64
 #define CTDB_MAX_CHAR_RANGE 256
-
 #define CTDB_MAX_VALUE_LEN (1024 * 1024 * 1024) //1G
 
+//node header
 #define CTDB_ITEMS_SIZE (CTDB_CHAR_LEN + CTDB_I64_LEN) //sub_prefix_char, sub_node_pos
 #define CTDB_NODE_SIZE (CTDB_CHAR_LEN + CTDB_MAX_KEY_LEN + CTDB_I64_LEN + CTDB_CHAR_LEN) //prefix_len, prefix, leaf_pos, items_count
+#define CTDB_LEAF_SIZE (CTDB_I64_LEN + CTDB_I32_LEN + CTDB_I64_LEN) //version, value_len, value_pos
 
-#define CTDB_LEAF_SIZE (CTDB_I32_LEN + CTDB_I64_LEN) //value_len, value_pos
-
+//check sum
 #define CTDB_FOOTER_ALIGNED_BASE (32)
 #define CTDB_FOOTER_SIZE (CTDB_I64_LEN * 5) //cksum_1, tran_count, del_count, root_pos, cksum_2
 
@@ -72,6 +74,7 @@ struct ctdb_leaf{
     //int create_time;
     //int expire;
     //int fingerprint;
+    uint64_t version;
     uint32_t value_len;
     off_t value_pos;
 };
@@ -90,12 +93,16 @@ int ctdb_put(struct ctdb_transaction *trans, char *key, uint8_t key_len, char *v
 int ctdb_del(struct ctdb_transaction *trans, char *key, uint8_t key_len);
 int ctdb_transaction_commit(struct ctdb_transaction *trans);
 void ctdb_transaction_rollback(struct ctdb_transaction *trans);
-void ctdb_transaction_free(struct ctdb_transaction *trans);
-void ctdb_close(struct ctdb *db);
+
+void ctdb_transaction_free(struct ctdb_transaction **trans);
+void ctdb_close(struct ctdb **db);
 
 //iterator
 typedef int ctdb_traversal(int fd, char *key, uint8_t key_len, struct ctdb_leaf leaf);
 int ctdb_iterator_travel(struct ctdb_transaction *trans, char *key, uint8_t key_len, ctdb_traversal *traversal);
+
+//vacuum
+int ctdb_vacuum(struct ctdb_transaction *trans, struct ctdb *new_db);
 
 #ifdef __cplusplus
 }
