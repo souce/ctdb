@@ -71,135 +71,86 @@ DEFINE_NUM_SWAPPING(double)
 #define SERIALIZER_OK 0
 #define SERIALIZER_ERR -1
 
-///////////////////////////////////////////////////////////////////////////////
-// IO
-///////////////////////////////////////////////////////////////////////////////
-#define SERIALIZER_IO_READ_BYTES(fd,res,len) \
-    ({ \
-        int readn = read((fd), (res), (len)); \
-        readn == (len) ? SERIALIZER_OK : SERIALIZER_ERR; \
+struct serializer{
+    char *buf;
+    size_t buf_len;
+    off_t offset;
+};
+
+#define SERIALIZER_INIT(len) \
+    ((struct serializer){ \
+        .buf = (char[(len)]){}, \
+        .buf_len = (len), \
+        .offset = 0 \
     })
 
-#define SERIALIZER_IO_WRITE_BYTES(fd,val,len) \
+#define SERIALIZER_READ_BYTES(ser,res,len) \
     ({ \
-        int writen = write((fd), (val), (len)); \
-        writen == (len) ? SERIALIZER_OK : SERIALIZER_ERR; \
-    })
-
-#define SERIALIZER_IO_READ_NUM(fd,res,type) \
-    ({ \
-        int opr = SERIALIZER_ERR; \
-        type val = 0; \
-        if(0 <= (fd)){ \
-            opr = SERIALIZER_IO_READ_BYTES((fd), &val, sizeof(type)); \
-            if(SERIALIZER_OK == opr){ \
-                (res) = swapping_##type(val); \
-            } \
+        off_t start = (ser).offset; \
+        if ((uintptr_t)NULL != (uintptr_t)((ser).buf) && \
+            (uintptr_t)NULL != (uintptr_t)(res) && \
+            0 < (len) && \
+            (ser).offset + (len) <= (ser).buf_len){ \
+                memcpy((res), (ser).buf + (ser).offset, (len)); \
+                (ser).offset += (len); \
         } \
-        opr; \
+        (len) == (ser).offset - start ? SERIALIZER_OK : SERIALIZER_ERR; \
     })
 
-#define SERIALIZER_IO_WRITE_NUM(fd,val,type) \
+#define SERIALIZER_WRITE_BYTES(ser,val,len) \
     ({ \
-        int opr = SERIALIZER_ERR; \
-        type v = swapping_##type((type)(val)); \
-        if(0 <= (fd)){ \
-            opr = SERIALIZER_IO_WRITE_BYTES((fd), &v, sizeof(type)); \
+        off_t start = (ser).offset; \
+        if ((uintptr_t)NULL != (uintptr_t)((ser).buf) && \
+            (uintptr_t)NULL != (uintptr_t)(val) && \
+            0 < (len) && \
+            (ser).offset + (len) <= (ser).buf_len){ \
+                memcpy((ser).buf + (ser).offset, (val), (len)); \
+                (ser).offset += (len); \
         } \
-        opr; \
+        (len) == (ser).offset - start ? SERIALIZER_OK : SERIALIZER_ERR; \
     })
 
-#define SERIALIZER_IO_READ_STR(fd,res,len) \
+#define SERIALIZER_SKIP_BYTES(ser,len) \
     ({ \
-        int opr = SERIALIZER_ERR; \
-        if(0 <= (fd) && NULL != (res)){ \
-            (res)[0] = '\0'; \
-            opr = SERIALIZER_IO_READ_BYTES((fd), (res), (len)); \
+        off_t start = (ser).offset; \
+        if ((uintptr_t)NULL != (uintptr_t)((ser).buf) && \
+            0 < (len) && \
+            (ser).offset + (len) <= (ser).buf_len){ \
+                (ser).offset += (len); \
         } \
-        opr; \
+        (len) == (ser).offset - start ? SERIALIZER_OK : SERIALIZER_ERR; \
     })
 
-#define SERIALIZER_IO_READ_NEW_STR(fd,res,len) \
-    ({ \
-        int opr = SERIALIZER_ERR; \
-        (res) = calloc(1, (len) + 1); \
-        if(0 <= (fd) && NULL != (res)){ \
-            opr = SERIALIZER_IO_READ_BYTES((fd), (res), (len)); \
-        } \
-        opr; \
-    })
-
-#define SERIALIZER_IO_WRITE_STR(fd,val,len) \
-    ({ \
-        int opr = SERIALIZER_ERR; \
-        if(0 <= (fd) && NULL != (val)){ \
-            opr = SERIALIZER_IO_WRITE_BYTES((fd), (val), (len)); \
-        } \
-        opr; \
-    })
-
-///////////////////////////////////////////////////////////////////////////////
-// BUFFER
-///////////////////////////////////////////////////////////////////////////////
-#define SERIALIZER_BUF_READ_BYTES(buf,end,res,len) \
-    ({ \
-        char *start = (buf); \
-        if(NULL != (buf) && 0 < (len) && (end + 1 - buf) >= (len)){ \
-            memcpy((res), (buf), (len)); \
-            (buf) += (len); \
-        } \
-        (len) == ((buf) - start) ? SERIALIZER_OK : SERIALIZER_ERR; \
-    })
-
-#define SERIALIZER_BUF_WRITE_BYTES(buf,end,val,len) \
-    ({ \
-        char *start = (buf); \
-        if(NULL != (buf) && 0 < (len) && (end + 1 - buf) >= (len)){ \
-            memcpy((buf), (val), (len)); \
-            (buf) += (len); \
-        } \
-        (len) == ((buf) - start) ? SERIALIZER_OK : SERIALIZER_ERR; \
-    })
-
-#define SERIALIZER_BUF_SKIP_BYTES(buf,end,len) \
-    ({ \
-        char *start = (buf); \
-        if(NULL != (buf) && 0 < (len) && (end + 1 - buf) >= (len)){ \
-            (buf) += (len); \
-        } \
-        (len) == ((buf) - start) ? SERIALIZER_OK : SERIALIZER_ERR; \
-    })
-
-#define SERIALIZER_BUF_READ_NUM(buf,end,res,type) \
+#define SERIALIZER_READ_NUM(ser,res,type) \
     ({ \
         type val_tmp; \
-        int opr = SERIALIZER_BUF_READ_BYTES((buf), (end), &val_tmp, sizeof(type)); \
+        int opr = SERIALIZER_READ_BYTES((ser), &val_tmp, sizeof(type)); \
         if(SERIALIZER_OK == opr){ \
             (res) = swapping_##type(val_tmp); \
         } \
         opr; \
     })
 
-#define SERIALIZER_BUF_WRITE_NUM(buf,end,val,type) \
+#define SERIALIZER_WRITE_NUM(ser,val,type) \
     ({ \
         type val_tmp = swapping_##type((type)(val)); \
-        SERIALIZER_BUF_WRITE_BYTES((buf), (end), &val_tmp, sizeof(type)); \
+        SERIALIZER_WRITE_BYTES((ser), &val_tmp, sizeof(type)); \
     })
 
-#define SERIALIZER_BUF_READ_STR(buf,end,res,len) \
+#define SERIALIZER_READ_STR(ser,res,len) \
     ({ \
-        SERIALIZER_BUF_READ_BYTES((buf), (end), (res), (len)); \
+        SERIALIZER_READ_BYTES((ser), (res), (len)); \
     })
 
-#define SERIALIZER_BUF_READ_NEW_STR(buf,end,res,len) \
+#define SERIALIZER_READ_NEW_STR(ser,res,len) \
     ({ \
         (res) = calloc(1, (len) + 1); \
-        SERIALIZER_BUF_READ_BYTES((buf), (end), (res), (len)); \
+        SERIALIZER_READ_BYTES((ser), (res), (len)); \
     })
 
-#define SERIALIZER_BUF_WRITE_STR(buf,end,val,len) \
+#define SERIALIZER_WRITE_STR(ser,val,len) \
     ({ \
-        SERIALIZER_BUF_WRITE_BYTES((buf), (end), (val), (len)); \
+        SERIALIZER_WRITE_BYTES((ser), (val), (len)); \
     })
 
 #ifdef __cplusplus
