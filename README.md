@@ -17,7 +17,9 @@ make iter; ./iter
 
 make simple; ./simple
 
-make trans; rm test.db; ./trans
+make trans; rm ./test.db; ./trans
+
+make vacuum; rm ./*.db; ./vacuum
 ```
 
 ### example
