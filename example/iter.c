@@ -32,14 +32,6 @@
 #include "ctdb.h"
 #include "utils.h"
 
-
-#define LAMBDA(return_type, function_body) \
-    ({ \
-        return_type __fn__ function_body \
-        __fn__; \
-    })
-
-int g_iter_count = 0;
 void test_iter(int count, char *prefix, uint8_t prefix_len) {
     int key_len = 32;
     char *path = "./test.db";
@@ -64,7 +56,7 @@ void test_iter(int count, char *prefix, uint8_t prefix_len) {
     ctdb_transaction_free(&trans);
     
     assert(NULL != (trans = ctdb_transaction_begin(db)));
-    g_iter_count = 0;
+    int g_iter_count = 0;
     int res = CTDB_FOREACH(trans, prefix, prefix_len, 
                 (int fd, char *key, uint8_t key_len, struct ctdb_leaf leaf){
                     g_iter_count += 1;
