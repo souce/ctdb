@@ -512,7 +512,7 @@ void ctdb_transaction_free(struct ctdb_transaction **trans){
 static int iterator_travel(int fd, struct ctdb_node *trav, char *key, uint8_t key_len, ctdb_traversal *traversal) {
     if ((trav->prefix_len + key_len) <= CTDB_MAX_KEY_LEN) {
         char prefix_key[CTDB_MAX_KEY_LEN + 1] = {[0 ... CTDB_MAX_KEY_LEN] = 0};
-        if (0 > sprintf(prefix_key, "%.*s%.*s", key_len, key, trav->prefix_len, trav->prefix)) goto over;
+        if (0 > snprintf(prefix_key, CTDB_MAX_KEY_LEN, "%.*s%.*s", key_len, key, trav->prefix_len, trav->prefix)) goto over;
         uint8_t prefix_key_len = key_len + trav->prefix_len;
 
         if (0 < trav->leaf_pos) {
