@@ -100,6 +100,15 @@ void ctdb_close(struct ctdb **db);
 //iterator
 typedef int ctdb_traversal(int fd, char *key, uint8_t key_len, struct ctdb_leaf leaf);
 int ctdb_iterator_travel(struct ctdb_transaction *trans, char *key, uint8_t key_len, ctdb_traversal *traversal);
+#define CTDB_FOREACH(trans, key, key_len, function_body) \
+    ({ \
+        ctdb_iterator_travel((trans), (key), (key_len), \
+            ({ \
+                int __nested_func_ptr__ function_body \
+                __nested_func_ptr__; \
+            }) \
+        ); \
+    })
 
 //vacuum
 int ctdb_vacuum(struct ctdb_transaction *trans, struct ctdb *new_db);
