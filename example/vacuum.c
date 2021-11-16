@@ -69,12 +69,6 @@ void stress_put_testing_single_transaction(int key_len, int count) {
     ctdb_close(&db);
 }
 
-#define LAMBDA(return_type, function_body) \
-    ({ \
-        return_type __fn__ function_body \
-        __fn__; \
-    })
-
 //check
 void test_iter() {
     char *path = "./test_tmp.db";
