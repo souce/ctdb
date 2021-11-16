@@ -69,7 +69,13 @@ void stress_put_testing_single_transaction(int key_len, int count) {
     ctdb_close(&db);
 }
 
-int g_iter_count = 0;
+#define LAMBDA(return_type, function_body) \
+    ({ \
+        return_type __fn__ function_body \
+        __fn__; \
+    })
+
+//check
 void test_iter() {
     char *path = "./test_tmp.db";
     struct ctdb *db = ctdb_open(path);
@@ -77,27 +83,25 @@ void test_iter() {
     
     struct ctdb_transaction *trans = ctdb_transaction_begin(db);
     assert(NULL != trans);
-    g_iter_count = 0;
-
-    int traversal(int fd, char *key, uint8_t key_len, struct ctdb_leaf leaf){
-        g_iter_count += 1;
-
-        assert(0 < leaf.value_len);
-        assert(0 < leaf.value_pos);
-        char *value = read_value_from_file(db->fd, leaf.value_len, leaf.value_pos);
-        assert(NULL != value);
-        assert(key_len == leaf.value_len && 0 == strncmp(key, value, key_len));
-        free(value);
-        
-        return CTDB_OK; //continue
-    }
-    if(CTDB_OK == ctdb_iterator_travel(trans, "", 0, traversal)){
+    int g_iter_count = 0;
+    int res = CTDB_FOREACH(trans, "", 0, 
+                (int fd, char *key, uint8_t key_len, struct ctdb_leaf leaf){
+                    g_iter_count += 1;
+                    assert(0 < leaf.value_len);
+                    assert(0 < leaf.value_pos);
+                    char *value = read_value_from_file(db->fd, leaf.value_len, leaf.value_pos);
+                    //printf("key:%.*s value:%.*s\n", key_len, key, leaf.value_len, value);
+                    assert(key_len == leaf.value_len && 0 == strncmp(key, value, key_len));
+                    free(value);
+                    return CTDB_OK; //continue 
+                }
+            );
+    if(CTDB_OK == res){
         assert(trans->footer.tran_count == g_iter_count);
         printf("iterator new_db sucess, tran_count:%lu iter_count:%d\n", trans->footer.tran_count, g_iter_count);
     }else{
         printf("iterator new_db failed!!! : %d\n", g_iter_count);
     }
-
     ctdb_transaction_free(&trans);
     ctdb_close(&db);
 }
