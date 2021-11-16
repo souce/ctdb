@@ -32,6 +32,13 @@
 #include "ctdb.h"
 #include "utils.h"
 
+
+#define LAMBDA(return_type, function_body) \
+    ({ \
+        return_type __fn__ function_body \
+        __fn__; \
+    })
+
 int g_iter_count = 0;
 void test_iter(int count, char *prefix, uint8_t prefix_len) {
     int key_len = 32;
@@ -58,23 +65,23 @@ void test_iter(int count, char *prefix, uint8_t prefix_len) {
     
     assert(NULL != (trans = ctdb_transaction_begin(db)));
     g_iter_count = 0;
-    
-    int traversal(int fd, char *key, uint8_t key_len, struct ctdb_leaf leaf){
-        g_iter_count += 1;
-        assert(0 < leaf.value_len);
-        assert(0 < leaf.value_pos);
-        char *value = read_value_from_file(fd, leaf.value_len, leaf.value_pos);
-        printf("key:%.*s value:%.*s\n", key_len, key, leaf.value_len, value);
-        assert(key_len == leaf.value_len && 0 == strncmp(key, value, key_len));
-        free(value);
-        return CTDB_OK; //continue
-    }
-    if(CTDB_OK == ctdb_iterator_travel(trans, prefix, prefix_len, traversal)){
+    int res = CTDB_FOREACH(trans, prefix, prefix_len, 
+                (int fd, char *key, uint8_t key_len, struct ctdb_leaf leaf){
+                    g_iter_count += 1;
+                    assert(0 < leaf.value_len);
+                    assert(0 < leaf.value_pos);
+                    char *value = read_value_from_file(fd, leaf.value_len, leaf.value_pos);
+                    printf("key:%.*s value:%.*s\n", key_len, key, leaf.value_len, value);
+                    assert(key_len == leaf.value_len && 0 == strncmp(key, value, key_len));
+                    free(value);
+                    return CTDB_OK; //continue 
+                }
+            );
+    if(CTDB_OK == res){
         printf("iterator sucess, prefix:'%s' count:%lu iter_count:%d\n", prefix, trans->footer.tran_count, g_iter_count);
     }else{
         printf("iterator failed!!!\n");
     }
-
     ctdb_transaction_free(&trans);
     ctdb_close(&db);
 }
