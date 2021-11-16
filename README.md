@@ -90,8 +90,9 @@ vacuum:
 struct ctdb *db = ctdb_open("./test.db");
 struct ctdb_transaction *trans = ctdb_transaction_begin(db);
 //...
+//copy the data to a new file and compress it
 struct ctdb *new_db = ctdb_open("./test_tmp.db");
-assert(CTDB_OK == ctdb_vacuum(trans, new_db)); //compressing db files
+assert(CTDB_OK == ctdb_vacuum(trans, new_db));
 ctdb_transaction_free(&trans);
 ctdb_close(&new_db);
 ctdb_close(&db);
