@@ -38,7 +38,7 @@ static int check_header(int fd) {
     int version_num = -1;
     struct serializer ser = SERIALIZER_INIT(CTDB_HEADER_SIZE);
     if (-1 == lseek(fd, 0, SEEK_SET)) return CTDB_ERR;  //get back to the beginning
-    if (CTDB_HEADER_SIZE != read(fd, ser.buf, CTDB_HEADER_SIZE)) return CTDB_ERR;
+    if (CTDB_HEADER_SIZE != read(fd, ser.buf, ser.buf_len)) return CTDB_ERR;
     if (SERIALIZER_OK != SERIALIZER_READ_STR(ser, magic_str, CTDB_MAGIC_LEN) ||
         SERIALIZER_OK != SERIALIZER_READ_NUM(ser, version_num, uint32_t)) {
         return CTDB_ERR;
@@ -55,7 +55,7 @@ static int dump_header(int fd) {
         return CTDB_ERR;
     }
     if (-1 == lseek(fd, 0, SEEK_SET)) return CTDB_ERR;  //get back to the beginning
-    if (CTDB_HEADER_SIZE != write(fd, ser.buf, CTDB_HEADER_SIZE)) return CTDB_ERR;
+    if (CTDB_HEADER_SIZE != write(fd, ser.buf, ser.buf_len)) return CTDB_ERR;
     return CTDB_OK;
 }
 
@@ -69,7 +69,7 @@ static int load_footer(int fd, struct ctdb_footer *footer) {
         struct ctdb_footer footer_in_file = {.tran_count = 0, .del_count = 0, .root_pos = 0};
         struct serializer ser = SERIALIZER_INIT(CTDB_FOOTER_SIZE);
         if (-1 == lseek(fd, flag_aligned_pos, SEEK_SET)) goto retry;
-        if (CTDB_FOOTER_SIZE != read(fd, ser.buf, CTDB_FOOTER_SIZE)) goto retry;
+        if (CTDB_FOOTER_SIZE != read(fd, ser.buf, ser.buf_len)) goto retry;
         if (SERIALIZER_OK != SERIALIZER_READ_NUM(ser, cksum_1, uint64_t) ||
             SERIALIZER_OK != SERIALIZER_READ_NUM(ser, footer_in_file.tran_count, uint64_t) ||
             SERIALIZER_OK != SERIALIZER_READ_NUM(ser, footer_in_file.del_count, uint64_t) ||
@@ -105,7 +105,7 @@ static int dump_footer(int fd, struct ctdb_footer *footer) {
     off_t file_size = lseek(fd, 0, SEEK_END);
     off_t flag_aligned_pos = FOOTER_ALIGNED(file_size);  //find a right position to write the 'transaction flag'
     if (-1 == lseek(fd, flag_aligned_pos, SEEK_SET)) return CTDB_ERR;
-    if (CTDB_FOOTER_SIZE != write(fd, ser.buf, CTDB_FOOTER_SIZE)) return CTDB_ERR;
+    if (CTDB_FOOTER_SIZE != write(fd, ser.buf, ser.buf_len)) return CTDB_ERR;
     return CTDB_OK;
 }
 
@@ -135,7 +135,7 @@ static inline int load_items(int fd, int items_count, struct ctdb_node_item *ite
 static int load_node(int fd, off_t node_pos, struct ctdb_node *node) {
     struct serializer ser = SERIALIZER_INIT(CTDB_NODE_SIZE);
     if (-1 == lseek(fd, node_pos, SEEK_SET)) return CTDB_ERR;
-    if (CTDB_NODE_SIZE != read(fd, ser.buf, CTDB_NODE_SIZE)) return CTDB_ERR;
+    if (CTDB_NODE_SIZE != read(fd, ser.buf, ser.buf_len)) return CTDB_ERR;
     if (SERIALIZER_OK != SERIALIZER_READ_NUM(ser, node->prefix_len, uint8_t) ||
         SERIALIZER_OK != SERIALIZER_READ_STR(ser, node->prefix, node->prefix_len) ||
         SERIALIZER_OK != SERIALIZER_READ_NUM(ser, node->leaf_pos, int64_t) ||
@@ -167,7 +167,7 @@ static off_t dump_node(int fd, struct ctdb_node *node) {
         SERIALIZER_OK != SERIALIZER_WRITE_NUM(ser, node->items_count, uint8_t)) {
         goto err;
     }
-    off_t node_pos = append_to_end(fd, ser.buf, CTDB_NODE_SIZE);
+    off_t node_pos = append_to_end(fd, ser.buf, ser.buf_len);
     
     if (0 >= node_pos) goto err;
     if (CTDB_OK != dump_items(fd, node->items_count, node->items)) goto err;
@@ -180,7 +180,7 @@ err:
 static int load_leaf(int fd, off_t leaf_pos, struct ctdb_leaf *leaf) {
     struct serializer ser = SERIALIZER_INIT(CTDB_LEAF_SIZE);
     if (-1 == lseek(fd, leaf_pos, SEEK_SET)) return CTDB_ERR;
-    if (CTDB_LEAF_SIZE != read(fd, ser.buf, CTDB_LEAF_SIZE)) return CTDB_ERR;
+    if (CTDB_LEAF_SIZE != read(fd, ser.buf, ser.buf_len)) return CTDB_ERR;
     if (SERIALIZER_OK != SERIALIZER_READ_NUM(ser, leaf->version, uint64_t) ||
         SERIALIZER_OK != SERIALIZER_READ_NUM(ser, leaf->value_len, uint32_t) ||
         SERIALIZER_OK != SERIALIZER_READ_NUM(ser, leaf->value_pos, int64_t)) {
@@ -196,7 +196,7 @@ static off_t dump_leaf(int fd, struct ctdb_leaf *leaf) {
         SERIALIZER_OK != SERIALIZER_WRITE_NUM(ser, leaf->value_pos, int64_t)) {
         goto err;
     }
-    return append_to_end(fd, ser.buf, CTDB_LEAF_SIZE);
+    return append_to_end(fd, ser.buf, ser.buf_len);
 
 err:
     return -1;
