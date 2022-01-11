@@ -48,12 +48,6 @@ extern "C" {
 #define CTDB_OK 0
 #define CTDB_ERR -1
 
-struct ctdb_footer{
-    uint64_t tran_count;
-    uint64_t del_count;
-    off_t root_pos;
-};
-
 struct ctdb{
     int fd;
 };
@@ -78,6 +72,12 @@ struct ctdb_leaf{
     uint32_t value_len;
     off_t value_pos;
 };
+
+struct ctdb_footer{
+    uint64_t tran_count;
+    uint64_t del_count;
+    off_t root_pos;
+};    
 
 struct ctdb_transaction{
     uint8_t is_isvalid;
