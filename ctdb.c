@@ -15,7 +15,6 @@
  * SOFTWARE.
  */
 
-#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -205,15 +204,12 @@ err:
 ///////////////////////////////////////////////////////////////////////////////
 // COMMEN
 ///////////////////////////////////////////////////////////////////////////////
-static inline int prefix_copy(char *filled_prefix_dst, uint8_t *prefix_dst_len, char *filled_prefix_src, uint8_t max_len) {
-    if (CTDB_MAX_KEY_LEN < max_len) goto err;
-    if (filled_prefix_dst == strncpy(filled_prefix_dst, filled_prefix_src, max_len)) {
-        if (NULL != prefix_dst_len) *prefix_dst_len = strnlen(filled_prefix_dst, CTDB_MAX_KEY_LEN);
-        return CTDB_OK;
+static inline int prefix_copy(char *filled_prefix_dst, char *prefix_src, uint8_t prefix_src_len) {
+    int copied_len = -1;
+    if (CTDB_MAX_KEY_LEN >= prefix_src_len && filled_prefix_dst == strncpy(filled_prefix_dst, prefix_src, prefix_src_len)) {
+        copied_len = strnlen(filled_prefix_dst, CTDB_MAX_KEY_LEN);
     }
-
-err:
-    return CTDB_ERR;
+    return copied_len;
 }
 
 static int item_cmp(const void *a, const void *b) {
@@ -295,7 +291,8 @@ static off_t append_node_to_file(int fd, struct ctdb_node *trav, char *prefix, u
         //across the same prefix
         uint8_t key_prefix_pos = prefix_pos;
         uint8_t sub_node_prefix_pos = 0;
-        while (sub_node_prefix_pos < sub_node.prefix_len && key_prefix_pos < prefix_len && 
+        while (sub_node_prefix_pos < sub_node.prefix_len && 
+                key_prefix_pos < prefix_len && 
                 prefix[key_prefix_pos] == sub_node.prefix[sub_node_prefix_pos]) {
             ++key_prefix_pos;
             ++sub_node_prefix_pos;
@@ -309,17 +306,17 @@ static off_t append_node_to_file(int fd, struct ctdb_node *trav, char *prefix, u
 
         } else {
             char old_remained[CTDB_MAX_KEY_LEN + 1] = {[0 ... CTDB_MAX_KEY_LEN] = 0};  //the old prefix does not include duplicate parts
-            if (CTDB_OK != prefix_copy(old_remained, NULL, sub_node.prefix + sub_node_prefix_pos, CTDB_MAX_KEY_LEN)) goto err;
+            if (0 > prefix_copy(old_remained, sub_node.prefix + sub_node_prefix_pos, CTDB_MAX_KEY_LEN - sub_node_prefix_pos)) goto err;
             
             char new_remained[CTDB_MAX_KEY_LEN + 1] = {[0 ... CTDB_MAX_KEY_LEN] = 0};  //the new prefix does not include duplicate parts
-            if (CTDB_OK != prefix_copy(new_remained, NULL, prefix + key_prefix_pos, CTDB_MAX_KEY_LEN)) goto err;
+            if (0 > prefix_copy(new_remained, prefix + key_prefix_pos, CTDB_MAX_KEY_LEN - key_prefix_pos)) goto err;
             if (key_prefix_pos == prefix_len) {
                 //the old prefix is longer and the new node should be inserted before the old node
-                if (CTDB_OK != prefix_copy(sub_node.prefix, &sub_node.prefix_len, old_remained, CTDB_MAX_KEY_LEN)) goto err;
+                if (0 > (sub_node.prefix_len = prefix_copy(sub_node.prefix, old_remained, CTDB_MAX_KEY_LEN))) goto err;
 
                 //the old node as a child of the new node
                 struct ctdb_node new_node = {.prefix_len = 0, .leaf_pos = leaf_pos, .items_count = 0};
-                if (CTDB_OK != prefix_copy(new_node.prefix, &new_node.prefix_len, prefix + prefix_pos, CTDB_MAX_KEY_LEN)) goto err;
+                if (0 > (new_node.prefix_len = prefix_copy(new_node.prefix, prefix + prefix_pos, CTDB_MAX_KEY_LEN - prefix_pos))) goto err;
                 if (CTDB_OK != put_node_into_items(&new_node, sub_node.prefix[0], dump_node(fd, &sub_node))) goto err;
 
                 //the new node as a child of the trav node
@@ -329,15 +326,15 @@ static off_t append_node_to_file(int fd, struct ctdb_node *trav, char *prefix, u
             } else {
                 //the new prefix and the old prefix are not duplicate, split a common node to accommodate both
                 struct ctdb_node common_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
-                if (CTDB_OK != prefix_copy(common_node.prefix, &common_node.prefix_len, sub_node.prefix, sub_node_prefix_pos)) goto err;
+                if (0 > (common_node.prefix_len = prefix_copy(common_node.prefix, sub_node.prefix, sub_node_prefix_pos))) goto err;
 
                 //the old node as a child of the common node
-                if (CTDB_OK != prefix_copy(sub_node.prefix, &sub_node.prefix_len, old_remained, CTDB_MAX_KEY_LEN)) goto err;
+                if (0 > (sub_node.prefix_len = prefix_copy(sub_node.prefix, old_remained, CTDB_MAX_KEY_LEN))) goto err;
                 if (CTDB_OK != put_node_into_items(&common_node, sub_node.prefix[0], dump_node(fd, &sub_node))) goto err;
 
                 //the new node as a child of the common node
                 struct ctdb_node new_node = {.prefix_len = 0, .leaf_pos = leaf_pos, .items_count = 0};
-                if (CTDB_OK != prefix_copy(new_node.prefix, &new_node.prefix_len, new_remained, CTDB_MAX_KEY_LEN)) goto err;
+                if (0 > (new_node.prefix_len = prefix_copy(new_node.prefix, new_remained, CTDB_MAX_KEY_LEN))) goto err;
                 if (CTDB_OK != put_node_into_items(&common_node, new_node.prefix[0], dump_node(fd, &new_node))) goto err;
 
                 //the common node as a child of the trav node
@@ -350,7 +347,7 @@ static off_t append_node_to_file(int fd, struct ctdb_node *trav, char *prefix, u
     if (prefix_len > prefix_pos) {
         //initialize the new node, or the new prefix is longer than the old prefix
         struct ctdb_node new_node = {.prefix_len = 0, .leaf_pos = leaf_pos, .items_count = 0};
-        if (CTDB_OK != prefix_copy(new_node.prefix, &new_node.prefix_len, prefix + prefix_pos, CTDB_MAX_KEY_LEN)) goto err;
+        if (0 > (new_node.prefix_len = prefix_copy(new_node.prefix, prefix + prefix_pos, CTDB_MAX_KEY_LEN - prefix_pos))) goto err;
         if (CTDB_OK != put_node_into_items(trav, new_node.prefix[0], dump_node(fd, &new_node))) goto err;
         return dump_node(fd, trav);  //append the node to the end of file
         
@@ -589,7 +586,7 @@ off_t vacuum_travel(int old_fd, int new_fd, struct ctdb_node *trav) {
         off_t old_sub_node_pos = trav->items[items_index].sub_node_pos;
         struct ctdb_node old_sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
         if (CTDB_OK != load_node(old_fd, old_sub_node_pos, &old_sub_node)) goto err;
-        off_t new_sub_node_pos = vacuum_travel(old_fd, new_fd, &old_sub_node);
+        off_t new_sub_node_pos = vacuum_travel(old_fd, new_fd, &old_sub_node); //traverse to the next node of the tree
         if (0 >= new_sub_node_pos) goto err;
         trav->items[items_index].sub_node_pos = new_sub_node_pos; //update item pos
     }
