@@ -63,22 +63,14 @@ traverse:
 struct ctdb *db = ctdb_open("./test.db");
 struct ctdb_transaction *trans = ctdb_transaction_begin(db);
 
-//traverse callback
-int traversal(char *key, int key_len, struct ctdb_leaf leaf){
-    printf("key:%.*s value_len:%u\n", key_len, key, leaf->value_len);
-    //return CTDB_ERR; //stop traversal
-    return CTDB_OK; //continue
-}
-
-//traverse all the data
-if(CTDB_OK == ctdb_iterator_travel(trans, "", 0, traversal)){
-    printf("end of traversal\n");
-}
-
 //traversing data starting with "app"
-if(CTDB_OK == ctdb_iterator_travel(trans, "app", 3, traversal)){
-    printf("end of traversal\n");
-}
+int res = CTDB_FOREACH(trans, "app", 3, 
+            (int fd, char *key, uint8_t key_len, struct ctdb_leaf leaf){
+                printf("key:%.*s value_len:%u\n", key_len, key, leaf.value_len);
+                //return CTDB_ERR; //stop traversal
+                return CTDB_OK; //continue
+            }
+        );
 
 ctdb_transaction_free(trans);
 ctdb_close(db);
