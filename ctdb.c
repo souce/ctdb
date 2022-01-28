@@ -424,13 +424,14 @@ struct ctdb_leaf ctdb_get(struct ctdb_transaction *trans, char *key, uint8_t key
     char filled_prefix_key[CTDB_MAX_KEY_LEN + 1] = {[0 ... CTDB_MAX_KEY_LEN] = 0};
     if (filled_prefix_key != strncpy(filled_prefix_key, key, key_len)) goto err;
     off_t sub_node_pos = find_node_from_file(trans->db->fd, trans->footer.root_pos, filled_prefix_key, key_len, 0, 0, NULL);  //not fuzzy match
-    if (0 >= sub_node_pos) goto err;  //no data found
+    if (0 >= sub_node_pos) goto err;  //node not found
     
     //load node from the file
     struct ctdb_node sub_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
     if (CTDB_OK != load_node(trans->db->fd, sub_node_pos, &sub_node)) goto err;
-    if (0 >= sub_node.leaf_pos) goto err;
+    if (0 >= sub_node.leaf_pos) goto err;  //leaf not found
 
+    //load leaf from the file
     struct ctdb_leaf leaf = {.version = 0, .value_len = 0, .value_pos = -1};
     if (CTDB_OK != load_leaf(trans->db->fd, sub_node.leaf_pos, &leaf)) goto err;
     if (0 == leaf.value_len) goto err;  //the data has been deleted
@@ -600,13 +601,13 @@ int ctdb_vacuum(struct ctdb_transaction *trans, struct ctdb *new_db) {
     if (NULL == trans || 1 != trans->is_isvalid) goto err; //verify that the transaction has not been committed or rolled back
     if (NULL == new_db) goto err;
 
-    //copy values to new_db
+    //copy the values to new_db
     struct ctdb_node root_node = {.prefix_len = 0, .leaf_pos = 0, .items_count = 0};
     if (CTDB_OK != load_node(trans->db->fd, trans->footer.root_pos, &root_node)) goto err;
     off_t new_root_pos = vacuum_travel(trans->db->fd, new_db->fd, &root_node);
     if (0 >= new_root_pos) goto err;
     
-    //commit a new transaction
+    //commit a new transaction for new_db
     struct ctdb_transaction new_db_trans = { 
         .is_isvalid = 1, 
         .db = new_db, 
